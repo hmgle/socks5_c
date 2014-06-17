@@ -1,3 +1,5 @@
+CFLAGS += -O0 -Wall -g
+
 SRCDIR = .
 SRC := $(wildcard $(SRCDIR)/*.c)
 SRCNAM := $(notdir $(SRC))
@@ -13,6 +15,14 @@ all:: $(TARGET)
 local: local.o $(OBJ)
 
 server: server.o $(OBJ)
+
+sinclude $(SRC:.c=.d)
+
+%.d: %.c
+	@set -e; rm -f $@; \
+		$(CC) -MM $(CPPFLAGS) $< > $@.$$$$; \
+		sed 's,\(.*\)\.o[:]*,$(ODIR)/\1.o $@:,' < $@.$$$$ > $@; \
+		rm -f $@.$$$$
 
 clean::
 	-rm -f *.o $(TARGET)
