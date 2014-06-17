@@ -91,6 +91,7 @@ struct ss_server_ctx *ss_create_server(uint16_t port);
 void ss_release_server(struct ss_server_ctx *ss_server);
 struct ss_conn_ctx *ss_server_add_conn(struct ss_server_ctx *s, int conn_fd,
 		int mask, struct conn_info *conn_info, struct io_event *event);
+void ss_server_del_conn(struct ss_server_ctx *s, struct ss_conn_ctx *conn);
 int ss_handshake_handle(struct ss_conn_ctx *conn);
 int ss_msg_handle(struct ss_conn_ctx *conn, 
 		void (*func)(struct ss_conn_ctx *conn));

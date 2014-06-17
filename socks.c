@@ -21,6 +21,14 @@ static int ss_fd_set_add_fd(struct ss_fd_set *fd_set, int fd, int mask)
 	return 0;
 }
 
+static void ss_fd_set_del_fd(struct ss_fd_set *fd_set, int fd, int mask)
+{
+	if (mask & AE_READABLE)
+		FD_CLR(fd, &fd_set->rfds);
+	if (mask & AE_WRITABLE)
+		FD_CLR(fd, &fd_set->wfds);
+}
+
 struct ss_server_ctx *ss_create_server(uint16_t port)
 {
 	struct ss_server_ctx *server;
@@ -87,10 +95,33 @@ struct ss_conn_ctx *ss_server_add_conn(struct ss_server_ctx *s, int conn_fd,
 	return new_conn;
 }
 
+void ss_server_del_conn(struct ss_server_ctx *s, struct ss_conn_ctx *conn)
+{
+	ss_fd_set_del_fd(s->ss_allfd_set, conn->conn_fd, AE_READABLE);
+	s->conn_count--;
+	list_del(&conn->list);
+	buf_release(conn->msg);
+	close(conn->conn_fd);
+	conn->ss_conn_state = CLOSED;
+	if (conn->data != NULL)
+		free(conn->data);
+	free(conn);
+}
+
 int ss_handshake_handle(struct ss_conn_ctx *conn)
 {
 	/* TODO */
+	ssize_t readed;
+	struct buf *buf = conn->server_entry->buf;
+
+	readed = recv(conn->conn_fd, buf->data, buf->max - 1, 0);
+	if (readed <= 0)
+		goto err;
 	return 0;
+err:
+	debug_print("handshake failed!");
+	ss_server_del_conn(conn->server_entry, conn);
+	return -1;
 }
 
 int ss_msg_handle(struct ss_conn_ctx *conn,
