@@ -110,13 +110,22 @@ void ss_server_del_conn(struct ss_server_ctx *s, struct ss_conn_ctx *conn)
 
 int ss_handshake_handle(struct ss_conn_ctx *conn)
 {
-	/* TODO */
 	ssize_t readed;
 	struct buf *buf = conn->server_entry->buf;
+	int ret;
 
-	readed = recv(conn->conn_fd, buf->data, buf->max - 1, 0);
+	readed = recv(conn->conn_fd, buf->data, 262, 0);
 	if (readed <= 0)
 		goto err;
+	if (buf->data[0] != 0x05)
+		goto err;
+	/* TODO: 检查客户端支持的认证机制 */
+	buf->data[0] = 0x05;
+	buf->data[1] = 0x0; /* NO AUTHENTICATION REQUIRED */
+	ret = send(conn->conn_fd, buf->data, 2, 0);
+	if (ret != 2)
+		goto err;
+	conn->ss_conn_state = CONNECTING;
 	return 0;
 err:
 	debug_print("handshake failed!");
