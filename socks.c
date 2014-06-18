@@ -217,12 +217,11 @@ int ss_send_msg_conn(struct ss_conn_ctx *conn, int msg_type)
 {
 	/* TODO */
 	int ret;
-	struct buf *buf = conn->server_entry->buf;
+	struct buf *msg = conn->msg;
 
-	strcpy((char *)buf->data, "hello");
-	ret = send(conn->conn_fd, buf->data, 5, 0);
-	if (ret != 5) {
-		debug_print("send return %d, buf->used is %d", ret, 5);
+	ret = send(conn->conn_fd, msg->data, msg->used, msg_type);
+	if (ret != msg->used) {
+		debug_print("send return %d", ret);
 		return -1;
 	}
 	return 0;
