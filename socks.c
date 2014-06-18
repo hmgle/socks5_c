@@ -137,12 +137,49 @@ int ss_msg_handle(struct ss_conn_ctx *conn,
 		void (*func)(struct ss_conn_ctx *conn))
 {
 	/* TODO */
+	struct buf *buf = conn->server_entry->buf;
+	int readed;
+
+	readed = recv(conn->conn_fd, buf->data, 4, 0);
+	if (readed != 4) {
+		ss_server_del_conn(conn->server_entry, conn);
+		return -1;
+	}
+	if (buf->data[0] != 0x05 || buf->data[2] != 0) {
+		ss_server_del_conn(conn->server_entry, conn);
+		return -1;
+	}
+	debug_print("CMD: %x, ATYP: %x", buf->data[1], buf->data[3]);
+	if (buf->data[1] != 0x01) {
+		debug_print("only support CONNECT CMD now -_-");
+		ss_server_del_conn(conn->server_entry, conn);
+		return -1;
+	}
+	switch (buf->data[3]) { /* ATYP */
+	case 0x01: /* IPv4 */
+	case 0x03: /* FQDN */
+	case 0x04: /* IPv6 */
+	default:
+		debug_print("err ATYP: %x", buf->data[3]);
+		ss_server_del_conn(conn->server_entry, conn);
+		return -1;
+	}
+	func(conn);
 	return 0;
 }
 
 int ss_send_msg_conn(struct ss_conn_ctx *conn, int msg_type)
 {
 	/* TODO */
+	int ret;
+	struct buf *buf = conn->server_entry->buf;
+
+	strcpy((char *)buf->data, "hello");
+	ret = send(conn->conn_fd, buf->data, 5, 0);
+	if (ret != 5) {
+		debug_print("send return %d, buf->used is %d", ret, 5);
+		return -1;
+	}
 	return 0;
 }
 
