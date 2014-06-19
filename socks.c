@@ -98,9 +98,6 @@ void ss_server_del_conn(struct ss_server_ctx *s, struct ss_conn_ctx *conn)
 	list_del(&conn->list);
 	buf_release(conn->msg);
 	close(conn->conn_fd);
-	conn->ss_conn_state = CLOSED;
-	if (conn->data != NULL)
-		free(conn->data);
 	free(conn);
 }
 

@@ -29,7 +29,6 @@ struct ss_fd_set {
 };
 
 typedef void ss_ioproc(void *owner, int fd, void *para, int mask);
-typedef int callback_proc(void *data);
 
 struct io_event {
 	int mask; /* one of AE_(READABLE|WRITABLE) */
@@ -54,8 +53,6 @@ struct ss_conn_ctx {
 	struct conn_info ss_conn_info;
 	struct io_event io_proc;
 	struct buf *msg;
-	callback_proc *cb_proc;
-	void *data;
 	struct list_head list;
 };
 
@@ -68,8 +65,6 @@ struct ss_server_ctx {
 	struct ss_conn_ctx *conn;
 	struct io_event io_proc;
 	struct buf *buf;
-	callback_proc *g_cb_proc; /* 对每个连接都有效 */
-	void *data;
 	int max_fd;
 	struct ss_fd_set *ss_allfd_set;
 	struct fd_curr_state *fd_state;
