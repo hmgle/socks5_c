@@ -258,6 +258,7 @@ static int ss_poll(struct ss_server_ctx *server)
 	int retval;
 	struct ss_fd_set *set = server->ss_allfd_set;
 	struct ss_conn_ctx *conn;
+	struct ss_remote_ctx *remote;
 
 	memcpy(&set->_rfds, &set->rfds, sizeof(fd_set));
 	memcpy(&set->_wfds, &set->wfds, sizeof(fd_set));
@@ -275,6 +276,14 @@ static int ss_poll(struct ss_server_ctx *server)
 				conn->io_proc.mask |= AE_READABLE;
 				server->fd_state[numevents].type = SS_CONN_CTX;
 				server->fd_state[numevents++].ctx_ptr = conn;
+			}
+		}
+		list_for_each_entry(remote, &server->remote->list, list) {
+			if (remote->fd_mask & AE_READABLE
+			    && FD_ISSET(remote->remote_fd, &set->_rfds)) {
+				remote->io_proc.mask |= AE_READABLE;
+				server->fd_state[numevents].type = SS_REMOTE_CTX;
+				server->fd_state[numevents++].ctx_ptr = remote;
 			}
 		}
 	}
@@ -301,6 +310,12 @@ void ss_loop(struct ss_server_ctx *server)
 						fd_state[i].ctx_ptr)->io_proc;
 				fd = ((struct ss_conn_ctx *)server->
 						fd_state[i].ctx_ptr)->conn_fd;
+			} else if (server->fd_state[i].type == SS_REMOTE_CTX) {
+				/* recv */
+				event = &((struct ss_remote_ctx *)server->
+						fd_state[i].ctx_ptr)->io_proc;
+				fd = ((struct ss_remote_ctx *)server->
+						fd_state[i].ctx_ptr)->remote_fd;
 			}
 			if (event->mask & AE_READABLE &&
 					event->rfileproc != NULL)
