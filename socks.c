@@ -56,6 +56,10 @@ struct ss_server_ctx *ss_create_server(uint16_t port)
 	if (server->conn == NULL)
 		DIE("calloc failed!");
 	INIT_LIST_HEAD(&server->conn->list);
+	server->remote = calloc(1, sizeof(*server->remote));
+	if (server->remote == NULL)
+		DIE("calloc failed!");
+	INIT_LIST_HEAD(&server->remote->list);
 	return server;
 }
 
@@ -94,21 +98,29 @@ struct ss_conn_ctx *ss_server_add_conn(struct ss_server_ctx *s, int conn_fd,
 /*
  * local connect server
  */
-void ss_server_set_remote(struct ss_server_ctx *s,
+struct ss_remote_ctx *ss_server_add_remote(struct ss_server_ctx *s,
 		int mask, const struct conn_info *remote_info,
 		struct io_event *event)
 {
-	s->remote.remote_fd = client_connect(remote_info->ip,
+	struct ss_remote_ctx *new_remote;
+
+	new_remote = calloc(1, sizeof(*new_remote));
+	if (new_remote == NULL)
+		return NULL;
+	new_remote->remote_fd = client_connect(remote_info->ip,
 					remote_info->port);
-	if (s->remote.remote_fd < 0)
+	if (new_remote->remote_fd < 0)
 		DIE("client_connect failed!");
-	s->remote.fd_mask = mask;
+	new_remote->fd_mask = mask;
 	if (event)
-		memcpy(&s->remote.io_proc, event, sizeof(*event));
-	s->max_fd = (s->remote.remote_fd > s->max_fd) ?
-				s->remote.remote_fd : s->max_fd;
-	if (ss_fd_set_add_fd(s->ss_allfd_set, s->remote.remote_fd, mask) < 0)
+		memcpy(&new_remote->io_proc, event, sizeof(*event));
+	s->remote_count++;
+	s->max_fd = (new_remote->remote_fd > s->max_fd) ?
+				new_remote->remote_fd : s->max_fd;
+	list_add(&new_remote->list, &s->remote->list);
+	if (ss_fd_set_add_fd(s->ss_allfd_set, new_remote->remote_fd, mask) < 0)
 		DIE("ss_fd_set_add_fd failed!");
+	return new_remote;
 }
 
 void ss_server_del_conn(struct ss_server_ctx *s, struct ss_conn_ctx *conn)
@@ -301,6 +313,7 @@ void ss_loop(struct ss_server_ctx *server)
 void ss_release_server(struct ss_server_ctx *ss_server)
 {
 	free(ss_server->conn);
+	free(ss_server->remote);
 	free(ss_server->fd_state);
 	free(ss_server->ss_allfd_set);
 	buf_release(ss_server->buf);

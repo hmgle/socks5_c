@@ -57,11 +57,18 @@ static void ss_io_handle(void *conn, int fd, void *data, int mask)
 	}
 }
 
+static void ss_remote_handle(void *s, int fd, void *data, int mask)
+{
+	/* TODO */
+}
+
 int main(int argc, char **argv)
 {
 	struct ss_server_ctx *lo_s;
 	struct io_event s_event;
 	struct io_event c_event;
+	struct io_event r_event;
+	struct conn_info remote_info = {"127.0.0.1", 8388};
 
 	lo_s = ss_create_server(1080);
 	if (lo_s == NULL)
@@ -73,7 +80,10 @@ int main(int argc, char **argv)
 	s_event.para = malloc(sizeof(c_event));
 	memcpy(s_event.para, &c_event, sizeof(c_event));
 	memcpy(&lo_s->io_proc, &s_event, sizeof(s_event));
-
+	memset(&r_event, 0, sizeof(r_event));
+	r_event.rfileproc = ss_remote_handle;
+	ss_server_add_remote(lo_s, AE_READABLE | AE_WRITABLE, &remote_info,
+				&r_event);
 	ss_loop(lo_s);
 	ss_release_server(lo_s);
 	return 0;
