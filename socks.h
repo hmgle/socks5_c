@@ -4,6 +4,7 @@
 #include "list.h"
 #include "debug.h"
 #include "socks5_protocol.h"
+#include "buffer.h"
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -76,7 +77,7 @@ struct ss_server_ctx {
 	int conn_count; /* 连接数 */
 	struct ss_conn_ctx *conn;
 	struct io_event io_proc;
-	uint8_t buf[4096];
+	struct buf *buf;
 	uint64_t time_event_next_id;
 	struct time_event *time_event_list;
 	callback_proc *g_cb_proc; /* 对每个连接都有效 */
@@ -87,5 +88,17 @@ struct ss_server_ctx {
 };
 
 struct ss_server_ctx *ss_create_server(uint16_t port);
+void ss_release_server(struct ss_server_ctx *ss_server);
+struct ss_conn_ctx *ss_server_add_conn(struct ss_server_ctx *s, int conn_fd,
+		int mask, struct conn_info *conn_info, struct io_event *event);
+void ss_server_del_conn(struct ss_server_ctx *s, struct ss_conn_ctx *conn);
+int ss_handshake_handle(struct ss_conn_ctx *conn);
+int ss_msg_handle(struct ss_conn_ctx *conn, 
+		void (*func)(struct ss_conn_ctx *conn));
+int ss_send_msg_conn(struct ss_conn_ctx *conn, int msg_type);
+void ss_loop(struct ss_server_ctx *server);
+int ss_server_add_time_event(struct ss_server_ctx *s, uint64_t ms, 
+			ss_timeproc *proc, void *para);
+void ss_server_del_time_event(struct time_event *te);
 
 #endif
