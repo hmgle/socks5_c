@@ -91,6 +91,26 @@ struct ss_conn_ctx *ss_server_add_conn(struct ss_server_ctx *s, int conn_fd,
 	return new_conn;
 }
 
+/*
+ * local connect server
+ */
+void ss_server_set_remote(struct ss_server_ctx *s,
+		int mask, const struct conn_info *remote_info,
+		struct io_event *event)
+{
+	s->remote.remote_fd = client_connect(remote_info->ip,
+					remote_info->port);
+	if (s->remote.remote_fd < 0)
+		DIE("client_connect failed!");
+	s->remote.fd_mask = mask;
+	if (event)
+		memcpy(&s->remote.io_proc, event, sizeof(*event));
+	s->max_fd = (s->remote.remote_fd > s->max_fd) ?
+				s->remote.remote_fd : s->max_fd;
+	if (ss_fd_set_add_fd(s->ss_allfd_set, s->remote.remote_fd, mask) < 0)
+		DIE("ss_fd_set_add_fd failed!");
+}
+
 void ss_server_del_conn(struct ss_server_ctx *s, struct ss_conn_ctx *conn)
 {
 	ss_fd_set_del_fd(s->ss_allfd_set, conn->conn_fd, AE_READABLE);
