@@ -1,5 +1,5 @@
 #include "socket_wrap.h"
-#include "socks.h"
+#include "server.h"
 
 static void ss_accept_handle(void *s, int fd, void *data, int mask)
 {
@@ -25,6 +25,14 @@ static void ss_accept_handle(void *s, int fd, void *data, int mask)
 static void ss_io_handle(void *conn, int fd, void *data, int mask)
 {
 	/* TODO */
+	struct ss_conn_ctx *conn_ptr = conn;
+	struct buf *buf = conn_ptr->server_entry->buf;
+	int ret;
+
+	return;
+err:
+	debug_print("close");
+	ss_server_del_conn(conn_ptr->server_entry, conn_ptr);
 }
 
 int main(int argc, char **argv)

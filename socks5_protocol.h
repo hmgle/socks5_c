@@ -4,6 +4,7 @@
 enum ss_state {
 	OPENING = 0,
 	CONNECTING,
+	CONNECTED,
 };
 
 #endif

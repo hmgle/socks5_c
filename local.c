@@ -52,6 +52,8 @@ static void ss_io_handle(void *conn, int fd, void *data, int mask)
 	case CONNECTING:
 		ss_msg_handle(conn_ptr, echo_func);
 		break;
+	case CONNECTED:
+		break;
 	default:
 		debug_print("unknow state!");
 	}
