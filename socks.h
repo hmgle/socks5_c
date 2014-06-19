@@ -29,7 +29,6 @@ struct ss_fd_set {
 };
 
 typedef void ss_ioproc(void *owner, int fd, void *para, int mask);
-typedef int ss_timeproc(struct ss_server_ctx *owner, long id, void *para);
 typedef int callback_proc(void *data);
 
 struct io_event {
@@ -37,15 +36,6 @@ struct io_event {
 	ss_ioproc *rfileproc;
 	ss_ioproc *wfileproc;
 	void *para;
-};
-
-struct time_event {
-	uint64_t id;	/* time event identifier. */
-	long when_sec;	/* seconds */
-	long when_ms;	/* milliseconds */
-	ss_timeproc *timeproc;
-	void *para;
-	struct list_head list;
 };
 
 #define SS_SERVER_CTX 1
@@ -78,8 +68,6 @@ struct ss_server_ctx {
 	struct ss_conn_ctx *conn;
 	struct io_event io_proc;
 	struct buf *buf;
-	uint64_t time_event_next_id;
-	struct time_event *time_event_list;
 	callback_proc *g_cb_proc; /* 对每个连接都有效 */
 	void *data;
 	int max_fd;
@@ -97,8 +85,5 @@ int ss_msg_handle(struct ss_conn_ctx *conn,
 		void (*func)(struct ss_conn_ctx *conn));
 int ss_send_msg_conn(struct ss_conn_ctx *conn, int msg_type);
 void ss_loop(struct ss_server_ctx *server);
-int ss_server_add_time_event(struct ss_server_ctx *s, uint64_t ms, 
-			ss_timeproc *proc, void *para);
-void ss_server_del_time_event(struct time_event *te);
 
 #endif
