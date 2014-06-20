@@ -37,6 +37,38 @@ static void ss_remote_io_handle(void *remote, int fd, void *data, int mask)
 		debug_print("send return %d, should send %d", ret, readed);
 }
 
+static struct ss_remote_ctx *trace_entry(const struct ss_remote_ctx *trace,
+					int n)
+{
+	struct ss_remote_ctx *pos;
+	int i = 0;
+
+	list_for_each_entry(pos, &trace->list, list) {
+		if (i == n)
+			return pos;
+		i++;
+	}
+	return NULL;
+}
+
+static void client_to_remote(struct ss_conn_ctx *conn)
+{
+	int readed;
+	int ret;
+	struct buf *buf = conn->msg;
+	struct ss_remote_ctx *remote;
+
+	readed = recv(conn->conn_fd, buf->data, buf->max, MSG_DONTWAIT);
+	if (readed <= 0) {
+		ss_server_del_conn(conn->server_entry, conn);
+		return;
+	}
+	remote = trace_entry(conn->remote, 0);
+	ret = send(remote->remote_fd, buf->data, readed, MSG_DONTWAIT);
+	if (ret != readed)
+		debug_print("send return %d, should send %d", ret, readed);
+}
+
 static void ss_io_handle(void *conn, int fd, void *data, int mask)
 {
 	struct ss_conn_ctx *conn_ptr = conn;
@@ -58,6 +90,7 @@ static void ss_io_handle(void *conn, int fd, void *data, int mask)
 	case CONNECTING:
 	case CONNECTED:
 		/* TODO */
+		client_to_remote(conn_ptr);
 		break;
 	default:
 		debug_print("unknow state!");
