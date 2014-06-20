@@ -1,5 +1,5 @@
 #include "socket_wrap.h"
-#include "server.h"
+#include "socks.h"
 
 static void ss_accept_handle(void *s, int fd, void *data, int mask)
 {
@@ -19,6 +19,28 @@ static void ss_accept_handle(void *s, int fd, void *data, int mask)
 	}
 }
 
+static void echo_func(struct ss_conn_ctx *conn)
+{
+	int ret;
+	char buf[1024], msg[128];
+	size_t length;
+
+	strcpy(msg, "<html>hello, socks5</html>");
+	length = strlen(msg);
+	/* Build the HTTP response */
+	sprintf(buf, "HTTP/1.0 200 OK\r\n");
+	sprintf(buf, "%sServer: Socks5 Server\r\n", buf);
+	sprintf(buf, "%sContent-length: %d\r\n", buf, (int)length);
+	sprintf(buf, "%sContent-type: text/html\r\n\r\n", buf);
+	sprintf(buf, "%s%s", buf, msg);
+	strcpy((char *)conn->msg->data, buf);
+	debug_print("%s", conn->msg->data);
+	conn->msg->used = strlen((char *)conn->msg->data);
+	ret = ss_send_msg_conn(conn, 0);
+	if (ret < 0)
+		debug_print("ss_send_msg_conn return %d", ret);
+}
+
 /*
  * read from local
  */
@@ -29,6 +51,15 @@ static void ss_io_handle(void *conn, int fd, void *data, int mask)
 	struct buf *buf = conn_ptr->server_entry->buf;
 	int ret;
 
+	switch (conn_ptr->ss_conn_state) {
+	case OPENING: /* reply */
+		ss_msg_handle(conn_ptr, echo_func);
+		break;
+	case CONNECTING: /* forwarding */
+		break;
+	default:
+		debug_print("unknow status");
+	}
 	return;
 err:
 	debug_print("close");

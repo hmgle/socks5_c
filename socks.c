@@ -56,10 +56,6 @@ struct ss_server_ctx *ss_create_server(uint16_t port)
 	if (server->conn == NULL)
 		DIE("calloc failed!");
 	INIT_LIST_HEAD(&server->conn->list);
-	server->remote = calloc(1, sizeof(*server->remote));
-	if (server->remote == NULL)
-		DIE("calloc failed!");
-	INIT_LIST_HEAD(&server->remote->list);
 	return server;
 }
 
@@ -88,6 +84,10 @@ struct ss_conn_ctx *ss_server_add_conn(struct ss_server_ctx *s, int conn_fd,
 	if (event)
 		memcpy(&new_conn->io_proc, event, sizeof(*event));
 	list_add(&new_conn->list, &s->conn->list);
+	new_conn->remote = calloc(1, sizeof(*new_conn->remote));
+	if (new_conn->remote == NULL)
+		DIE("calloc failed!");
+	INIT_LIST_HEAD(&new_conn->remote->list);
 	s->conn_count++;
 	s->max_fd = (conn_fd > s->max_fd) ? conn_fd : s->max_fd;
 	if (ss_fd_set_add_fd(s->ss_allfd_set, conn_fd, mask) < 0)
@@ -98,11 +98,12 @@ struct ss_conn_ctx *ss_server_add_conn(struct ss_server_ctx *s, int conn_fd,
 /*
  * local connect server
  */
-struct ss_remote_ctx *ss_server_add_remote(struct ss_server_ctx *s,
+struct ss_remote_ctx *ss_conn_add_remote(struct ss_conn_ctx *conn,
 		int mask, const struct conn_info *remote_info,
 		struct io_event *event)
 {
 	struct ss_remote_ctx *new_remote;
+	struct ss_server_ctx *s = conn->server_entry;
 
 	new_remote = calloc(1, sizeof(*new_remote));
 	if (new_remote == NULL)
@@ -114,10 +115,10 @@ struct ss_remote_ctx *ss_server_add_remote(struct ss_server_ctx *s,
 	new_remote->fd_mask = mask;
 	if (event)
 		memcpy(&new_remote->io_proc, event, sizeof(*event));
-	s->remote_count++;
+	conn->remote_count++;
 	s->max_fd = (new_remote->remote_fd > s->max_fd) ?
 				new_remote->remote_fd : s->max_fd;
-	list_add(&new_remote->list, &s->remote->list);
+	list_add(&new_remote->list, &conn->remote->list);
 	if (ss_fd_set_add_fd(s->ss_allfd_set, new_remote->remote_fd, mask) < 0)
 		DIE("ss_fd_set_add_fd failed!");
 	return new_remote;
@@ -277,13 +278,15 @@ static int ss_poll(struct ss_server_ctx *server)
 				server->fd_state[numevents].type = SS_CONN_CTX;
 				server->fd_state[numevents++].ctx_ptr = conn;
 			}
-		}
-		list_for_each_entry(remote, &server->remote->list, list) {
-			if (remote->fd_mask & AE_READABLE
-			    && FD_ISSET(remote->remote_fd, &set->_rfds)) {
-				remote->io_proc.mask |= AE_READABLE;
-				server->fd_state[numevents].type = SS_REMOTE_CTX;
-				server->fd_state[numevents++].ctx_ptr = remote;
+			list_for_each_entry(remote, &conn->remote->list, list) {
+				if (remote->fd_mask & AE_READABLE &&
+				    FD_ISSET(remote->remote_fd, &set->_rfds)) {
+					remote->io_proc.mask |= AE_READABLE;
+					server->fd_state[numevents].type =
+								SS_REMOTE_CTX;
+					server->fd_state[numevents++].ctx_ptr =
+								remote;
+				}
 			}
 		}
 	}
@@ -328,7 +331,6 @@ void ss_loop(struct ss_server_ctx *server)
 void ss_release_server(struct ss_server_ctx *ss_server)
 {
 	free(ss_server->conn);
-	free(ss_server->remote);
 	free(ss_server->fd_state);
 	free(ss_server->ss_allfd_set);
 	buf_release(ss_server->buf);

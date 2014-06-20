@@ -11,7 +11,6 @@
 #define AE_NONE 0
 #define AE_READABLE 1
 #define AE_WRITABLE 2
-
 #define AE_NOMORE -1
 
 struct ss_server_ctx;
@@ -46,6 +45,13 @@ struct fd_curr_state {
 	void *ctx_ptr;
 };
 
+struct ss_remote_ctx {
+	int remote_fd;
+	int fd_mask; /* one of AE_(READABLE|WRITABLE) */
+	struct io_event io_proc;
+	struct list_head list;
+};
+
 struct ss_conn_ctx {
 	int conn_fd;
 	struct ss_server_ctx *server_entry;
@@ -55,13 +61,8 @@ struct ss_conn_ctx {
 	struct io_event io_proc;
 	struct buf *msg;
 	struct list_head list;
-};
-
-struct ss_remote_ctx {
-	int remote_fd;
-	int fd_mask; /* one of AE_(READABLE|WRITABLE) */
-	struct io_event io_proc;
-	struct list_head list;
+	int remote_count;
+	struct ss_remote_ctx *remote;
 };
 
 struct ss_server_ctx {
@@ -71,8 +72,6 @@ struct ss_server_ctx {
 	uint32_t s_addr;
 	int conn_count; /* 连接数 */
 	struct ss_conn_ctx *conn;
-	int remote_count;
-	struct ss_remote_ctx *remote;
 	struct io_event io_proc;
 	struct buf *buf;
 	int max_fd;
@@ -84,7 +83,7 @@ struct ss_server_ctx *ss_create_server(uint16_t port);
 void ss_release_server(struct ss_server_ctx *ss_server);
 struct ss_conn_ctx *ss_server_add_conn(struct ss_server_ctx *s, int conn_fd,
 		int mask, struct conn_info *conn_info, struct io_event *event);
-struct ss_remote_ctx *ss_server_add_remote(struct ss_server_ctx *s, int mask,
+struct ss_remote_ctx *ss_conn_add_remote(struct ss_conn_ctx *conn, int mask,
 		const struct conn_info *remote_info,
 		struct io_event *event);
 void ss_server_del_conn(struct ss_server_ctx *s, struct ss_conn_ctx *conn);
