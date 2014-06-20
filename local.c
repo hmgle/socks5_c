@@ -19,13 +19,41 @@ static void ss_accept_handle(void *s, int fd, void *data, int mask)
 	}
 }
 
+static void ss_remote_io_handle(void *remote, int fd, void *data, int mask)
+{
+	int readed;
+	int ret;
+	struct ss_remote_ctx *remote_ptr = remote;
+	struct buf *buf = remote_ptr->conn_entry->msg;
+
+	readed = recv(fd, buf->data, buf->max, MSG_DONTWAIT);
+	if (readed <= 0) {
+		ss_conn_del_remote(remote_ptr->conn_entry, remote_ptr);
+		return;
+	}
+	ret = send(remote_ptr->conn_entry->conn_fd, buf->data, readed,
+			MSG_DONTWAIT);
+	if (ret != readed)
+		debug_print("send return %d, should send %d", ret, readed);
+}
+
 static void ss_io_handle(void *conn, int fd, void *data, int mask)
 {
 	struct ss_conn_ctx *conn_ptr = conn;
+	struct conn_info remote_info = {"127.0.0.1", 8388};
+	struct io_event event = {
+		.mask = AE_READABLE | AE_WRITABLE,
+		.rfileproc = ss_remote_io_handle, /* server 可读 */
+		.wfileproc = NULL,
+		.para = NULL,
+	};
 
 	switch (conn_ptr->ss_conn_state) {
 	case OPENING:
 		ss_handshake_handle(conn_ptr);
+		ss_conn_add_remote(conn_ptr, AE_READABLE | AE_WRITABLE,
+				&remote_info, &event);
+		conn_ptr->ss_conn_state = CONNECTING;
 		break;
 	case CONNECTING:
 	case CONNECTED:

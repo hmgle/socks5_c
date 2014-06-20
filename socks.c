@@ -110,6 +110,7 @@ struct ss_remote_ctx *ss_conn_add_remote(struct ss_conn_ctx *conn,
 		return NULL;
 	new_remote->remote_fd = client_connect(remote_info->ip,
 					remote_info->port);
+	new_remote->conn_entry = conn;
 	if (new_remote->remote_fd < 0)
 		DIE("client_connect failed!");
 	new_remote->fd_mask = mask;
@@ -126,12 +127,24 @@ struct ss_remote_ctx *ss_conn_add_remote(struct ss_conn_ctx *conn,
 
 void ss_server_del_conn(struct ss_server_ctx *s, struct ss_conn_ctx *conn)
 {
-	ss_fd_set_del_fd(s->ss_allfd_set, conn->conn_fd, AE_READABLE);
+	ss_fd_set_del_fd(s->ss_allfd_set, conn->conn_fd, conn->fd_mask);
 	s->conn_count--;
 	list_del(&conn->list);
 	buf_release(conn->msg);
 	close(conn->conn_fd);
 	free(conn);
+}
+
+void ss_conn_del_remote(struct ss_conn_ctx *conn, struct ss_remote_ctx *remote)
+{
+	struct ss_server_ctx *s;
+
+	s = conn->server_entry;
+	ss_fd_set_del_fd(s->ss_allfd_set, remote->remote_fd, remote->fd_mask);
+	s->conn_count--;
+	list_del(&remote->list);
+	close(remote->remote_fd);
+	free(remote);
 }
 
 int ss_handshake_handle(struct ss_conn_ctx *conn)
