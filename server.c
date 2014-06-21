@@ -53,7 +53,7 @@ static void ss_io_handle(void *conn, int fd, void *data, int mask)
 
 	switch (conn_ptr->ss_conn_state) {
 	case OPENING: /* reply */
-		ss_msg_handle(conn_ptr, echo_func);
+		ss_request_handle(conn_ptr, echo_func);
 		break;
 	case CONNECTING: /* forwarding */
 		break;

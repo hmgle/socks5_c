@@ -171,80 +171,53 @@ err:
 	return -1;
 }
 
-int ss_msg_handle(struct ss_conn_ctx *conn,
-		void (*func)(struct ss_conn_ctx *conn))
+static struct ss_requests_frame *
+ss_get_requests(struct ss_requests_frame *requests, int fd,
+		struct ss_conn_ctx *conn)
 {
-	/* TODO */
 	struct buf *buf = conn->server_entry->buf;
 	ssize_t ret;
 
-	ret = recv(conn->conn_fd, buf->data, 4, 0);
-	if (ret != 4) {
-		ss_server_del_conn(conn->server_entry, conn);
-		return -1;
-	}
-	if (buf->data[0] != 0x05 || buf->data[2] != 0) {
-		ss_server_del_conn(conn->server_entry, conn);
-		return -1;
-	}
+	ret = recv(fd, buf->data, 4, 0);
+	if (ret != 4)
+		return NULL;
+	if (buf->data[0] != 0x05 || buf->data[2] != 0)
+		return NULL;
 	if (buf->data[1] != 0x01) {
 		debug_print("only support CONNECT CMD now -_-");
-		ss_server_del_conn(conn->server_entry, conn);
-		return -1;
+		return NULL;
 	}
 	switch (buf->data[3]) { /* ATYP */
-	int s_addr = inet_aton("0.0.0.0", NULL);
-	uint32_t us_addr = htonl(s_addr);
 	case 0x01: /* IPv4 */
 		ret = recv(conn->conn_fd, buf->data + 4, 6, 0);
-		if (ret != 6) {
-			ss_server_del_conn(conn->server_entry, conn);
-			return -1;
-		}
-		buf->data[0] = 0x5;
-		buf->data[1] = 0x0;
-		buf->data[2] = 0x0;
-		buf->data[3] = 0x1;
-		memcpy(&buf->data[4], &us_addr, 4);
-		buf->data[4 + 4] = 0x19;
-		buf->data[4 + 5] = 0x19;
-		buf->used = 10;
-		ret = send(conn->conn_fd, buf->data, buf->used, 0);
-		if (ret != buf->used) {
-			debug_print("send return %d", (int)ret);
-			return -1;
-		}
+		if (ret != 6)
+			return NULL;
 		break;
 	case 0x03: /* FQDN */
 		ret = recv(conn->conn_fd, buf->data + 4, 1, 0);
-		if (ret != 1) {
-			ss_server_del_conn(conn->server_entry, conn);
-			return -1;
-		}
+		if (ret != 1)
+			return NULL;
 		uint8_t url_length = buf->data[4];
 		ret = recv(conn->conn_fd, buf->data + 5, url_length + 2, 0);
-		if (ret != url_length + 2) {
-			ss_server_del_conn(conn->server_entry, conn);
-			return -1;
-		}
-		buf->data[0] = 0x5;
-		buf->data[1] = 0x0;
-		buf->data[2] = 0x0;
-		buf->data[3] = 0x1;
-		memcpy(&buf->data[4], &us_addr, 4);
-		buf->data[4 + 4] = 0x19;
-		buf->data[4 + 5] = 0x19;
-		buf->used = 10;
-		ret = send(conn->conn_fd, buf->data, buf->used, 0);
-		if (ret != buf->used) {
-			debug_print("send return %d", (int)ret);
-			return -1;
-		}
+		if (ret != url_length + 2)
+			return NULL;
 		break;
 	case 0x04: /* IPv6 */
 		break;
 	default:
 		debug_print("err ATYP: %x", buf->data[3]);
+		return NULL;
+	}
+	return requests;
+}
+
+int ss_request_handle(struct ss_conn_ctx *conn,
+		void (*func)(struct ss_conn_ctx *conn))
+{
+	/* TODO */
+	struct ss_requests_frame requests;
+
+	if (ss_get_requests(&requests, conn->conn_fd, conn) == NULL) {
 		ss_server_del_conn(conn->server_entry, conn);
 		return -1;
 	}
