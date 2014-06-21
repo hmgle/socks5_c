@@ -187,27 +187,40 @@ ss_get_requests(struct ss_requests_frame *requests, int fd,
 		debug_print("only support CONNECT CMD now -_-");
 		return NULL;
 	}
+	requests->ver = 0x05;
+	requests->cmd = 0x01;
+	requests->rsv = 0x0;
 	switch (buf->data[3]) { /* ATYP */
 	case 0x01: /* IPv4 */
-		ret = recv(conn->conn_fd, buf->data + 4, 6, 0);
-		if (ret != 6)
+		requests->atyp = 0x01;
+		ret = recv(conn->conn_fd, requests->dst_addr, 4, 0);
+		if (ret != 4)
 			return NULL;
+		requests->dst_addr[ret] = '\0';
 		break;
 	case 0x03: /* FQDN */
-		ret = recv(conn->conn_fd, buf->data + 4, 1, 0);
+		requests->atyp = 0x03;
+		ret = recv(conn->conn_fd, requests->dst_addr, 1, 0);
 		if (ret != 1)
 			return NULL;
-		uint8_t url_length = buf->data[4];
-		ret = recv(conn->conn_fd, buf->data + 5, url_length + 2, 0);
-		if (ret != url_length + 2)
+		ret = recv(conn->conn_fd, &requests->dst_addr[1],
+				requests->dst_addr[0], 0);
+		if (ret != requests->dst_addr[0])
 			return NULL;
 		break;
 	case 0x04: /* IPv6 */
+		requests->atyp = 0x04;
+		ret = recv(conn->conn_fd, requests->dst_addr, 16, 0);
+		if (ret != 16)
+			return NULL;
 		break;
 	default:
 		debug_print("err ATYP: %x", buf->data[3]);
 		return NULL;
 	}
+	ret = recv(conn->conn_fd, requests->dst_port, 2, 0);
+	if (ret != 2)
+		return NULL;
 	return requests;
 }
 
@@ -218,6 +231,7 @@ int ss_request_handle(struct ss_conn_ctx *conn,
 	struct ss_requests_frame requests;
 
 	if (ss_get_requests(&requests, conn->conn_fd, conn) == NULL) {
+		debug_print("ss_get_requests() failed!");
 		ss_server_del_conn(conn->server_entry, conn);
 		return -1;
 	}
