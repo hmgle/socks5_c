@@ -270,6 +270,8 @@ int ss_request_handle(struct ss_conn_ctx *conn,
 {
 	/* TODO */
 	struct ss_requests_frame requests;
+	struct buf *buf = conn->server_entry->buf;
+	int ret;
 
 	if (ss_get_requests(&requests, conn->conn_fd, conn) == NULL) {
 		debug_print("ss_get_requests() failed!");
@@ -278,6 +280,22 @@ int ss_request_handle(struct ss_conn_ctx *conn,
 	}
 	if (get_addr_info(&requests, remote_info) == NULL) {
 		debug_print("get_addr_info() failed!");
+		return -1;
+	}
+	buf->data[0] = 0x5;
+	buf->data[1] = 0x0;
+	buf->data[2] = 0x0;
+	buf->data[3] = 0x1;
+	int s_addr = inet_aton("0.0.0.0", NULL);
+	uint32_t us_addr = htonl(s_addr);
+	memcpy(&buf->data[4], &us_addr, 4);
+	buf->data[4] = 0x1;
+	buf->data[4 + 4] = 0x19;
+	buf->data[4 + 5] = 0x19;
+	buf->used = 10;
+	ret = send(conn->conn_fd, buf->data, buf->used, 0);
+	if (ret != buf->used) {
+		debug_print("send return %d", (int)ret);
 		return -1;
 	}
 	return 0;
