@@ -91,7 +91,7 @@ void ss_server_del_conn(struct ss_server_ctx *s, struct ss_conn_ctx *conn);
 void ss_conn_del_remote(struct ss_conn_ctx *conn, struct ss_remote_ctx *remote);
 int ss_handshake_handle(struct ss_conn_ctx *conn);
 int ss_request_handle(struct ss_conn_ctx *conn, 
-		void (*func)(struct ss_conn_ctx *conn));
+		struct conn_info *remote_info);
 int ss_send_msg_conn(struct ss_conn_ctx *conn, int msg_type);
 void ss_loop(struct ss_server_ctx *server);
 

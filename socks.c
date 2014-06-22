@@ -258,28 +258,15 @@ static struct conn_info *get_addr_info(const struct ss_requests_frame *requests,
 	case 0x04: /* ip v6 */
 		break;
 	default:
-		debug_print("unknow atyp");
+		debug_print("unknow atyp!");
 		return NULL;
 	}
 	remote_info->port = ntohs(*((uint16_t *)(requests->dst_port)));
 	return remote_info;
 }
 
-static struct ss_remote_ctx *
-server_connect_remote(const struct ss_requests_frame *requests,
-		struct ss_conn_ctx *conn)
-{
-	/* TODO */
-	struct conn_info remote_info;
-
-	if (get_addr_info(requests, &remote_info) == NULL) {
-		debug_print("get_addr_info() failed!");
-		return NULL;
-	}
-}
-
 int ss_request_handle(struct ss_conn_ctx *conn,
-		void (*func)(struct ss_conn_ctx *conn))
+		struct conn_info *remote_info)
 {
 	/* TODO */
 	struct ss_requests_frame requests;
@@ -289,8 +276,10 @@ int ss_request_handle(struct ss_conn_ctx *conn,
 		ss_server_del_conn(conn->server_entry, conn);
 		return -1;
 	}
-	server_connect_remote(&requests, conn);
-	func(conn);
+	if (get_addr_info(&requests, remote_info) == NULL) {
+		debug_print("get_addr_info() failed!");
+		return -1;
+	}
 	return 0;
 }
 
