@@ -92,6 +92,7 @@ static void ss_io_handle(void *conn, int fd, void *data, int mask)
 			goto err;
 		ss_conn_add_remote(conn_ptr, AE_READABLE | AE_WRITABLE,
 				&remote_info, &event);
+		conn_ptr->ss_conn_state = CONNECTING;
 		break;
 	case CONNECTING: /* forwarding */
 		client_to_remote(conn_ptr);
