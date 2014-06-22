@@ -11,7 +11,6 @@
 #define AE_NONE 0
 #define AE_READABLE 1
 #define AE_WRITABLE 2
-
 #define AE_NOMORE -1
 
 struct ss_server_ctx;
@@ -29,8 +28,6 @@ struct ss_fd_set {
 };
 
 typedef void ss_ioproc(void *owner, int fd, void *para, int mask);
-typedef int ss_timeproc(struct ss_server_ctx *owner, long id, void *para);
-typedef int callback_proc(void *data);
 
 struct io_event {
 	int mask; /* one of AE_(READABLE|WRITABLE) */
@@ -39,21 +36,21 @@ struct io_event {
 	void *para;
 };
 
-struct time_event {
-	uint64_t id;	/* time event identifier. */
-	long when_sec;	/* seconds */
-	long when_ms;	/* milliseconds */
-	ss_timeproc *timeproc;
-	void *para;
-	struct list_head list;
-};
-
 #define SS_SERVER_CTX 1
 #define SS_CONN_CTX 2
+#define SS_REMOTE_CTX 3
 
 struct fd_curr_state {
 	int type;
 	void *ctx_ptr;
+};
+
+struct ss_remote_ctx {
+	int remote_fd;
+	struct ss_conn_ctx *conn_entry;
+	int fd_mask; /* one of AE_(READABLE|WRITABLE) */
+	struct io_event io_proc;
+	struct list_head list;
 };
 
 struct ss_conn_ctx {
@@ -64,9 +61,9 @@ struct ss_conn_ctx {
 	struct conn_info ss_conn_info;
 	struct io_event io_proc;
 	struct buf *msg;
-	callback_proc *cb_proc;
-	void *data;
 	struct list_head list;
+	int remote_count;
+	struct ss_remote_ctx *remote;
 };
 
 struct ss_server_ctx {
@@ -78,10 +75,6 @@ struct ss_server_ctx {
 	struct ss_conn_ctx *conn;
 	struct io_event io_proc;
 	struct buf *buf;
-	uint64_t time_event_next_id;
-	struct time_event *time_event_list;
-	callback_proc *g_cb_proc; /* 对每个连接都有效 */
-	void *data;
 	int max_fd;
 	struct ss_fd_set *ss_allfd_set;
 	struct fd_curr_state *fd_state;
@@ -91,14 +84,15 @@ struct ss_server_ctx *ss_create_server(uint16_t port);
 void ss_release_server(struct ss_server_ctx *ss_server);
 struct ss_conn_ctx *ss_server_add_conn(struct ss_server_ctx *s, int conn_fd,
 		int mask, struct conn_info *conn_info, struct io_event *event);
+struct ss_remote_ctx *ss_conn_add_remote(struct ss_conn_ctx *conn, int mask,
+		const struct conn_info *remote_info,
+		struct io_event *event);
 void ss_server_del_conn(struct ss_server_ctx *s, struct ss_conn_ctx *conn);
+void ss_conn_del_remote(struct ss_conn_ctx *conn, struct ss_remote_ctx *remote);
 int ss_handshake_handle(struct ss_conn_ctx *conn);
-int ss_msg_handle(struct ss_conn_ctx *conn, 
-		void (*func)(struct ss_conn_ctx *conn));
+int ss_request_handle(struct ss_conn_ctx *conn, 
+		struct conn_info *remote_info);
 int ss_send_msg_conn(struct ss_conn_ctx *conn, int msg_type);
 void ss_loop(struct ss_server_ctx *server);
-int ss_server_add_time_event(struct ss_server_ctx *s, uint64_t ms, 
-			ss_timeproc *proc, void *para);
-void ss_server_del_time_event(struct time_event *te);
 
 #endif

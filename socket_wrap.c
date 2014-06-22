@@ -51,11 +51,6 @@ int create_server_socket(uint16_t port)
 			sizeof(sock_opt))) == -1)
 		DIE("setsockopt failed!");
 
-	/* disable Nagle */
-	if ((setsockopt(server_s, IPPROTO_TCP, TCP_NODELAY, (char *)&sock_opt,
-			sizeof(int))) == -1)
-		DIE("setsockopt failed!");
-
 	/* internet family-specific code encapsulated in bind_server()  */
 	if (bind_server(server_s, NULL, port) == -1)
 		DIE("unable to bind");

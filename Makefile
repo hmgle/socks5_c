@@ -32,4 +32,4 @@ sinclude $(SRC:.c=.d)
 		rm -f $@.$$$$
 
 clean::
-	-rm -f *.o $(TARGET)
+	-rm -f *.d *.o $(TARGET)

@@ -19,38 +19,78 @@ static void ss_accept_handle(void *s, int fd, void *data, int mask)
 	}
 }
 
-static void echo_func(struct ss_conn_ctx *conn)
+static void ss_remote_io_handle(void *remote, int fd, void *data, int mask)
 {
+	int readed;
 	int ret;
-	char buf[1024], msg[128];
-	size_t length;
+	struct ss_remote_ctx *remote_ptr = remote;
+	struct buf *buf = remote_ptr->conn_entry->msg;
 
-	strcpy(msg, "<html>hello, socks5</html>");
-	length = strlen(msg);
-	/* Build the HTTP response */
-	sprintf(buf, "HTTP/1.0 200 OK\r\n");
-	sprintf(buf, "%sServer: Socks5 Server\r\n", buf);
-	sprintf(buf, "%sContent-length: %d\r\n", buf, length);
-	sprintf(buf, "%sContent-type: text/html\r\n\r\n", buf);
-	sprintf(buf, "%s%s", buf, msg);
-	strcpy(conn->msg->data, buf);
-	debug_print("%s", conn->msg->data);
-	conn->msg->used = strlen(conn->msg->data);
-	ret = ss_send_msg_conn(conn, 0);
-	if (ret < 0)
-		debug_print("ss_send_msg_conn return %d", ret);
+	readed = recv(fd, buf->data, buf->max, MSG_DONTWAIT);
+	if (readed <= 0) {
+		ss_conn_del_remote(remote_ptr->conn_entry, remote_ptr);
+		return;
+	}
+	ret = send(remote_ptr->conn_entry->conn_fd, buf->data, readed,
+			MSG_DONTWAIT);
+	if (ret != readed)
+		debug_print("send return %d, should send %d", ret, readed);
+}
+
+static struct ss_remote_ctx *trace_entry(const struct ss_remote_ctx *trace,
+					int n)
+{
+	struct ss_remote_ctx *pos;
+	int i = 0;
+
+	list_for_each_entry(pos, &trace->list, list) {
+		if (i == n)
+			return pos;
+		i++;
+	}
+	return NULL;
+}
+
+static void client_to_remote(struct ss_conn_ctx *conn)
+{
+	int readed;
+	int ret;
+	struct buf *buf = conn->msg;
+	struct ss_remote_ctx *remote;
+
+	readed = recv(conn->conn_fd, buf->data, buf->max, MSG_DONTWAIT);
+	if (readed <= 0) {
+		ss_server_del_conn(conn->server_entry, conn);
+		return;
+	}
+	remote = trace_entry(conn->remote, 0);
+	ret = send(remote->remote_fd, buf->data, readed, MSG_DONTWAIT);
+	if (ret != readed)
+		debug_print("send return %d, should send %d", ret, readed);
 }
 
 static void ss_io_handle(void *conn, int fd, void *data, int mask)
 {
 	struct ss_conn_ctx *conn_ptr = conn;
+	struct conn_info remote_info = {"127.0.0.1", 8388};
+	struct io_event event = {
+		.mask = AE_READABLE | AE_WRITABLE,
+		.rfileproc = ss_remote_io_handle, /* server 可读 */
+		.wfileproc = NULL,
+		.para = NULL,
+	};
 
 	switch (conn_ptr->ss_conn_state) {
 	case OPENING:
 		ss_handshake_handle(conn_ptr);
+		ss_conn_add_remote(conn_ptr, AE_READABLE | AE_WRITABLE,
+				&remote_info, &event);
+		conn_ptr->ss_conn_state = CONNECTING;
 		break;
 	case CONNECTING:
-		ss_msg_handle(conn_ptr, echo_func);
+	case CONNECTED:
+		/* TODO */
+		client_to_remote(conn_ptr);
 		break;
 	default:
 		debug_print("unknow state!");
@@ -73,7 +113,6 @@ int main(int argc, char **argv)
 	s_event.para = malloc(sizeof(c_event));
 	memcpy(s_event.para, &c_event, sizeof(c_event));
 	memcpy(&lo_s->io_proc, &s_event, sizeof(s_event));
-
 	ss_loop(lo_s);
 	ss_release_server(lo_s);
 	return 0;

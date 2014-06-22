@@ -56,10 +56,6 @@ struct ss_server_ctx *ss_create_server(uint16_t port)
 	if (server->conn == NULL)
 		DIE("calloc failed!");
 	INIT_LIST_HEAD(&server->conn->list);
-	server->time_event_list = calloc(1, sizeof(*server->time_event_list));
-	if (server->time_event_list == NULL)
-		DIE("calloc failed!");
-	INIT_LIST_HEAD(&server->time_event_list->list);
 	return server;
 }
 
@@ -88,6 +84,10 @@ struct ss_conn_ctx *ss_server_add_conn(struct ss_server_ctx *s, int conn_fd,
 	if (event)
 		memcpy(&new_conn->io_proc, event, sizeof(*event));
 	list_add(&new_conn->list, &s->conn->list);
+	new_conn->remote = calloc(1, sizeof(*new_conn->remote));
+	if (new_conn->remote == NULL)
+		DIE("calloc failed!");
+	INIT_LIST_HEAD(&new_conn->remote->list);
 	s->conn_count++;
 	s->max_fd = (conn_fd > s->max_fd) ? conn_fd : s->max_fd;
 	if (ss_fd_set_add_fd(s->ss_allfd_set, conn_fd, mask) < 0)
@@ -95,17 +95,56 @@ struct ss_conn_ctx *ss_server_add_conn(struct ss_server_ctx *s, int conn_fd,
 	return new_conn;
 }
 
+/*
+ * local connect server
+ */
+struct ss_remote_ctx *ss_conn_add_remote(struct ss_conn_ctx *conn,
+		int mask, const struct conn_info *remote_info,
+		struct io_event *event)
+{
+	struct ss_remote_ctx *new_remote;
+	struct ss_server_ctx *s = conn->server_entry;
+
+	new_remote = calloc(1, sizeof(*new_remote));
+	if (new_remote == NULL)
+		return NULL;
+	new_remote->remote_fd = client_connect(remote_info->ip,
+					remote_info->port);
+	new_remote->conn_entry = conn;
+	if (new_remote->remote_fd < 0)
+		DIE("client_connect failed!");
+	new_remote->fd_mask = mask;
+	if (event)
+		memcpy(&new_remote->io_proc, event, sizeof(*event));
+	conn->remote_count++;
+	s->max_fd = (new_remote->remote_fd > s->max_fd) ?
+				new_remote->remote_fd : s->max_fd;
+	list_add(&new_remote->list, &conn->remote->list);
+	if (ss_fd_set_add_fd(s->ss_allfd_set, new_remote->remote_fd, mask) < 0)
+		DIE("ss_fd_set_add_fd failed!");
+	return new_remote;
+}
+
 void ss_server_del_conn(struct ss_server_ctx *s, struct ss_conn_ctx *conn)
 {
-	ss_fd_set_del_fd(s->ss_allfd_set, conn->conn_fd, AE_READABLE);
+	ss_fd_set_del_fd(s->ss_allfd_set, conn->conn_fd, conn->fd_mask);
 	s->conn_count--;
 	list_del(&conn->list);
 	buf_release(conn->msg);
 	close(conn->conn_fd);
-	conn->ss_conn_state = CLOSED;
-	if (conn->data != NULL)
-		free(conn->data);
 	free(conn);
+}
+
+void ss_conn_del_remote(struct ss_conn_ctx *conn, struct ss_remote_ctx *remote)
+{
+	struct ss_server_ctx *s;
+
+	s = conn->server_entry;
+	ss_fd_set_del_fd(s->ss_allfd_set, remote->remote_fd, remote->fd_mask);
+	s->conn_count--;
+	list_del(&remote->list);
+	close(remote->remote_fd);
+	free(remote);
 }
 
 int ss_handshake_handle(struct ss_conn_ctx *conn)
@@ -132,84 +171,133 @@ err:
 	return -1;
 }
 
-int ss_msg_handle(struct ss_conn_ctx *conn,
-		void (*func)(struct ss_conn_ctx *conn))
+static struct ss_requests_frame *
+ss_get_requests(struct ss_requests_frame *requests, int fd,
+		struct ss_conn_ctx *conn)
 {
-	/* TODO */
 	struct buf *buf = conn->server_entry->buf;
 	ssize_t ret;
 
-	ret = recv(conn->conn_fd, buf->data, 4, 0);
-	if (ret != 4) {
-		ss_server_del_conn(conn->server_entry, conn);
-		return -1;
-	}
-	if (buf->data[0] != 0x05 || buf->data[2] != 0) {
-		ss_server_del_conn(conn->server_entry, conn);
-		return -1;
-	}
+	ret = recv(fd, buf->data, 4, 0);
+	if (ret != 4)
+		return NULL;
+	if (buf->data[0] != 0x05 || buf->data[2] != 0)
+		return NULL;
 	if (buf->data[1] != 0x01) {
 		debug_print("only support CONNECT CMD now -_-");
-		ss_server_del_conn(conn->server_entry, conn);
-		return -1;
+		return NULL;
 	}
+	requests->ver = 0x05;
+	requests->cmd = 0x01;
+	requests->rsv = 0x0;
 	switch (buf->data[3]) { /* ATYP */
-	int s_addr = inet_aton("0.0.0.0", NULL);
-	uint32_t us_addr = htonl(s_addr);
 	case 0x01: /* IPv4 */
-		ret = recv(conn->conn_fd, buf->data + 4, 6, 0);
-		if (ret != 6) {
-			ss_server_del_conn(conn->server_entry, conn);
-			return -1;
-		}
-		buf->data[0] = 0x5;
-		buf->data[1] = 0x0;
-		buf->data[2] = 0x0;
-		buf->data[3] = 0x1;
-		memcpy(&buf->data[4], &us_addr, 4);
-		buf->data[4 + 4] = 0x19;
-		buf->data[4 + 5] = 0x19;
-		buf->used = 10;
-		ret = send(conn->conn_fd, buf->data, buf->used, 0);
-		if (ret != buf->used) {
-			debug_print("send return %d", (int)ret);
-			return -1;
-		}
+		requests->atyp = 0x01;
+		ret = recv(conn->conn_fd, requests->dst_addr, 4, 0);
+		if (ret != 4)
+			return NULL;
+		requests->dst_addr[ret] = '\0';
 		break;
 	case 0x03: /* FQDN */
-		ret = recv(conn->conn_fd, buf->data + 4, 1, 0);
-		if (ret != 1) {
-			ss_server_del_conn(conn->server_entry, conn);
-			return -1;
-		}
-		uint8_t url_length = buf->data[4];
-		ret = recv(conn->conn_fd, buf->data + 5, url_length + 2, 0);
-		if (ret != url_length + 2) {
-			ss_server_del_conn(conn->server_entry, conn);
-			return -1;
-		}
-		buf->data[0] = 0x5;
-		buf->data[1] = 0x0;
-		buf->data[2] = 0x0;
-		buf->data[3] = 0x1;
-		memcpy(&buf->data[4], &us_addr, 4);
-		buf->data[4 + 4] = 0x19;
-		buf->data[4 + 5] = 0x19;
-		buf->used = 10;
-		ret = send(conn->conn_fd, buf->data, buf->used, 0);
-		if (ret != buf->used) {
-			debug_print("send return %d", (int)ret);
-			return -1;
-		}
+		requests->atyp = 0x03;
+		ret = recv(conn->conn_fd, requests->dst_addr, 1, 0);
+		if (ret != 1)
+			return NULL;
+		ret = recv(conn->conn_fd, &requests->dst_addr[1],
+				requests->dst_addr[0], 0);
+		if (ret != requests->dst_addr[0])
+			return NULL;
+		requests->dst_addr[ret + 1] = '\0';
 		break;
 	case 0x04: /* IPv6 */
+		requests->atyp = 0x04;
+		ret = recv(conn->conn_fd, requests->dst_addr, 16, 0);
+		if (ret != 16)
+			return NULL;
 		break;
 	default:
 		debug_print("err ATYP: %x", buf->data[3]);
+		return NULL;
+	}
+	ret = recv(conn->conn_fd, requests->dst_port, 2, 0);
+	if (ret != 2)
+		return NULL;
+	return requests;
+}
+
+static struct conn_info *get_addr_info(const struct ss_requests_frame *requests,
+				       struct conn_info *remote_info)
+{
+	struct in_addr remote_addr;
+	struct hostent *hptr;
+	char **pptr;
+	char str[INET_ADDRSTRLEN];
+
+	bzero(&remote_addr, sizeof(remote_addr));
+	switch (requests->atyp) {
+	case 0x01: /* ip v4 */
+		memcpy(&remote_addr.s_addr, requests->dst_addr,
+			sizeof(remote_addr.s_addr));
+		sprintf(remote_info->ip, "%s", inet_ntoa(remote_addr));
+		break;
+	case 0x03: /* domainname */
+		if ((hptr = gethostbyname((char *)&requests->dst_addr[1])) ==
+				NULL) {
+			debug_print("gethostbyname() failed!");
+			return NULL;
+		}
+		if (hptr->h_addrtype == AF_INET) {
+			pptr = hptr->h_addr_list;
+			for (; *pptr != NULL; pptr++) {
+				sprintf(remote_info->ip, "%s",
+					inet_ntop(hptr->h_addrtype, *pptr,
+						str, sizeof(str)));
+			}
+		}
+		break;
+	case 0x04: /* ip v6 */
+		break;
+	default:
+		debug_print("unknow atyp!");
+		return NULL;
+	}
+	remote_info->port = ntohs(*((uint16_t *)(requests->dst_port)));
+	return remote_info;
+}
+
+int ss_request_handle(struct ss_conn_ctx *conn,
+		struct conn_info *remote_info)
+{
+	/* TODO */
+	struct ss_requests_frame requests;
+	struct buf *buf = conn->server_entry->buf;
+	int ret;
+
+	if (ss_get_requests(&requests, conn->conn_fd, conn) == NULL) {
+		debug_print("ss_get_requests() failed!");
 		ss_server_del_conn(conn->server_entry, conn);
 		return -1;
 	}
-	func(conn);
+	if (get_addr_info(&requests, remote_info) == NULL) {
+		debug_print("get_addr_info() failed!");
+		return -1;
+	}
+	buf->data[0] = 0x5;
+	buf->data[1] = 0x0;
+	buf->data[2] = 0x0;
+	buf->data[3] = 0x1;
+	int s_addr = inet_aton("0.0.0.0", NULL);
+	uint32_t us_addr = htonl(s_addr);
+	memcpy(&buf->data[4], &us_addr, 4);
+	buf->data[4] = 0x1;
+	buf->data[4 + 4] = 0x19;
+	buf->data[4 + 5] = 0x19;
+	buf->used = 10;
+	ret = send(conn->conn_fd, buf->data, buf->used, 0);
+	if (ret != buf->used) {
+		debug_print("send return %d", (int)ret);
+		return -1;
+	}
 	return 0;
 }
 
@@ -227,57 +315,18 @@ int ss_send_msg_conn(struct ss_conn_ctx *conn, int msg_type)
 	return 0;
 }
 
-static inline void gettime(long *seconds, long *milliseconds)
-{
-	struct timeval tv;
-
-	gettimeofday(&tv, NULL);
-	*seconds = tv.tv_sec;
-	*milliseconds = tv.tv_usec / 1000;
-}
-
-static int get_nearest_timer(const struct ss_server_ctx *s, struct timeval *tv)
-{
-	struct time_event *te;
-	struct time_event *nearest = NULL;
-	long now_sec, now_ms;
-
-	list_for_each_entry(te, &s->time_event_list->list, list) {
-		if (!nearest || te->when_sec < nearest->when_sec
-		    || (te->when_sec == nearest->when_sec
-		    && te->when_ms < nearest->when_ms))
-			nearest = te;
-	}
-	if (nearest == NULL)
-		return -1;
-	gettime(&now_sec, &now_ms);
-	tv->tv_sec = nearest->when_sec - now_sec;
-	if (nearest->when_ms < now_ms) {
-		tv->tv_usec = ((nearest->when_ms + 1000) - now_ms) * 1000;
-		tv->tv_sec -= 1;
-	} else
-		tv->tv_usec = (nearest->when_ms - now_ms) * 1000;
-	if (tv->tv_sec < 0)
-		tv->tv_sec = 0;
-	if (tv->tv_usec < 0)
-		tv->tv_usec = 0;
-	return 0;
-}
-
 static int ss_poll(struct ss_server_ctx *server)
 {
 	int numevents = 0;
 	int retval;
 	struct ss_fd_set *set = server->ss_allfd_set;
 	struct ss_conn_ctx *conn;
-	struct timeval nearest_tv;
-	struct timeval *tv;
+	struct ss_remote_ctx *remote;
 
 	memcpy(&set->_rfds, &set->rfds, sizeof(fd_set));
 	memcpy(&set->_wfds, &set->wfds, sizeof(fd_set));
-	retval = get_nearest_timer(server, &nearest_tv);
-	tv = retval < 0 ? NULL : &nearest_tv;
-	retval = select(server->max_fd + 1, &set->_rfds, &set->_wfds, NULL, tv);
+	retval = select(server->max_fd + 1, &set->_rfds, &set->_wfds, NULL,
+			NULL);
 	if (retval > 0) {
 		if (FD_ISSET(server->sock_fd, &set->_rfds)) {
 			server->io_proc.mask |= AE_READABLE;
@@ -291,57 +340,19 @@ static int ss_poll(struct ss_server_ctx *server)
 				server->fd_state[numevents].type = SS_CONN_CTX;
 				server->fd_state[numevents++].ctx_ptr = conn;
 			}
+			list_for_each_entry(remote, &conn->remote->list, list) {
+				if (remote->fd_mask & AE_READABLE &&
+				    FD_ISSET(remote->remote_fd, &set->_rfds)) {
+					remote->io_proc.mask |= AE_READABLE;
+					server->fd_state[numevents].type =
+								SS_REMOTE_CTX;
+					server->fd_state[numevents++].ctx_ptr =
+								remote;
+				}
+			}
 		}
 	}
 	return numevents;
-}
-
-static inline int is_timeup(const struct time_event *te)
-{
-	long now_sec, now_ms;
-
-	gettime(&now_sec, &now_ms);
-	return now_sec > te->when_sec ||
-		(now_sec == te->when_sec
-		&& now_ms >= te->when_ms);
-}
-
-static void addmillisecondstonow(uint64_t milliseconds, long *sec, long *ms)
-{
-	long cur_sec, cur_ms, when_sec, when_ms;
-
-	gettime(&cur_sec, &cur_ms);
-	when_sec = cur_sec + milliseconds / 1000;
-	when_ms = cur_ms + milliseconds % 1000;
-	if (when_ms >= 1000) {
-		when_sec ++;
-		when_ms -= 1000;
-	}
-	*sec = when_sec;
-	*ms = when_ms;
-}
-
-static inline int proc_time_event(struct ss_server_ctx *s)
-{
-	int processed = 0;
-	struct time_event *te;
-	struct list_head *pos, *q;
-	int ret;
-
-	list_for_each_safe(pos, q, &s->time_event_list->list) {
-		te = list_entry(pos, struct time_event, list);
-		ret = is_timeup(te);
-		if (ret) {
-			ret = te->timeproc(s, te->id, te->para);
-			if (ret != AE_NOMORE)
-				addmillisecondstonow(ret, &te->when_sec,
-							&te->when_ms);
-			else
-				ss_server_del_time_event(te);
-			processed++;
-		}
-	}
-	return processed;
 }
 
 void ss_loop(struct ss_server_ctx *server)
@@ -364,46 +375,26 @@ void ss_loop(struct ss_server_ctx *server)
 						fd_state[i].ctx_ptr)->io_proc;
 				fd = ((struct ss_conn_ctx *)server->
 						fd_state[i].ctx_ptr)->conn_fd;
+			} else if (server->fd_state[i].type == SS_REMOTE_CTX) {
+				/* recv */
+				event = &((struct ss_remote_ctx *)server->
+						fd_state[i].ctx_ptr)->io_proc;
+				fd = ((struct ss_remote_ctx *)server->
+						fd_state[i].ctx_ptr)->remote_fd;
 			}
 			if (event->mask & AE_READABLE &&
 					event->rfileproc != NULL)
 				event->rfileproc(server->fd_state[i].ctx_ptr,
 						fd, event->para, event->mask);
 		}
-		proc_time_event(server);
 	}
 }
 
 void ss_release_server(struct ss_server_ctx *ss_server)
 {
-	free(ss_server->time_event_list);
 	free(ss_server->conn);
 	free(ss_server->fd_state);
 	free(ss_server->ss_allfd_set);
 	buf_release(ss_server->buf);
 	free(ss_server);
-}
-
-int ss_server_add_time_event(struct ss_server_ctx *s, uint64_t ms,
-		ss_timeproc *proc, void *para)
-{
-	struct time_event *new_te;
-
-	new_te = calloc(1, sizeof(*new_te));
-	if (new_te == NULL)
-		return -1;
-	new_te->id = s->time_event_next_id++;
-	addmillisecondstonow(ms, &new_te->when_sec, &new_te->when_ms);
-	new_te->timeproc = proc;
-	new_te->para = para;
-	list_add(&new_te->list, &s->time_event_list->list);
-	return 0;
-}
-
-void ss_server_del_time_event(struct time_event *te)
-{
-	assert(te);
-	list_del(&te->list);
-	free(te);
-	te = NULL;
 }
