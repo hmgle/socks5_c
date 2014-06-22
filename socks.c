@@ -207,6 +207,7 @@ ss_get_requests(struct ss_requests_frame *requests, int fd,
 				requests->dst_addr[0], 0);
 		if (ret != requests->dst_addr[0])
 			return NULL;
+		requests->dst_addr[ret + 1] = '\0';
 		break;
 	case 0x04: /* IPv6 */
 		requests->atyp = 0x04;
@@ -224,6 +225,59 @@ ss_get_requests(struct ss_requests_frame *requests, int fd,
 	return requests;
 }
 
+static struct conn_info *get_addr_info(const struct ss_requests_frame *requests,
+				       struct conn_info *remote_info)
+{
+	struct in_addr remote_addr;
+	struct hostent *hptr;
+	char **pptr;
+	char str[INET_ADDRSTRLEN];
+
+	bzero(&remote_addr, sizeof(remote_addr));
+	switch (requests->atyp) {
+	case 0x01: /* ip v4 */
+		memcpy(&remote_addr.s_addr, requests->dst_addr,
+			sizeof(remote_addr.s_addr));
+		sprintf(remote_info->ip, "%s", inet_ntoa(remote_addr));
+		break;
+	case 0x03: /* domainname */
+		if ((hptr = gethostbyname((char *)&requests->dst_addr[1])) ==
+				NULL) {
+			debug_print("gethostbyname() failed!");
+			return NULL;
+		}
+		if (hptr->h_addrtype == AF_INET) {
+			pptr = hptr->h_addr_list;
+			for (; *pptr != NULL; pptr++) {
+				sprintf(remote_info->ip, "%s",
+					inet_ntop(hptr->h_addrtype, *pptr,
+						str, sizeof(str)));
+			}
+		}
+		break;
+	case 0x04: /* ip v6 */
+		break;
+	default:
+		debug_print("unknow atyp");
+		return NULL;
+	}
+	remote_info->port = ntohs(*((uint16_t *)(requests->dst_port)));
+	return remote_info;
+}
+
+static struct ss_remote_ctx *
+server_connect_remote(const struct ss_requests_frame *requests,
+		struct ss_conn_ctx *conn)
+{
+	/* TODO */
+	struct conn_info remote_info;
+
+	if (get_addr_info(requests, &remote_info) == NULL) {
+		debug_print("get_addr_info() failed!");
+		return NULL;
+	}
+}
+
 int ss_request_handle(struct ss_conn_ctx *conn,
 		void (*func)(struct ss_conn_ctx *conn))
 {
@@ -235,6 +289,7 @@ int ss_request_handle(struct ss_conn_ctx *conn,
 		ss_server_del_conn(conn->server_entry, conn);
 		return -1;
 	}
+	server_connect_remote(&requests, conn);
 	func(conn);
 	return 0;
 }
