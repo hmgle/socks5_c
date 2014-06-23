@@ -49,9 +49,6 @@ struct ss_server_ctx *ss_create_server(uint16_t port)
 	if (ss_fd_set_add_fd(server->ss_allfd_set,
 				server->sock_fd, AE_READABLE) < 0)
 		DIE("ss_fd_set_add_fd failed!");
-	server->fd_state = calloc(1, sizeof(*server->fd_state));
-	if (server->fd_state == NULL)
-		DIE("calloc failed!");
 	server->conn = calloc(1, sizeof(*server->conn));
 	if (server->conn == NULL)
 		DIE("calloc failed!");
@@ -393,7 +390,6 @@ void ss_loop(struct ss_server_ctx *server)
 void ss_release_server(struct ss_server_ctx *ss_server)
 {
 	free(ss_server->conn);
-	free(ss_server->fd_state);
 	free(ss_server->ss_allfd_set);
 	buf_release(ss_server->buf);
 	free(ss_server);

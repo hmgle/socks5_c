@@ -77,7 +77,7 @@ struct ss_server_ctx {
 	struct buf *buf;
 	int max_fd;
 	struct ss_fd_set *ss_allfd_set;
-	struct fd_curr_state *fd_state;
+	struct fd_curr_state fd_state[1024 * 10];
 };
 
 struct ss_server_ctx *ss_create_server(uint16_t port);
