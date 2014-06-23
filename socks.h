@@ -50,7 +50,6 @@ struct ss_remote_ctx {
 	struct ss_conn_ctx *conn_entry;
 	int fd_mask; /* one of AE_(READABLE|WRITABLE) */
 	struct io_event io_proc;
-	struct list_head list;
 };
 
 struct ss_conn_ctx {
@@ -63,7 +62,7 @@ struct ss_conn_ctx {
 	struct buf *msg;
 	struct list_head list;
 	int remote_count;
-	struct ss_remote_ctx *remote;
+	struct ss_remote_ctx remote;
 };
 
 struct ss_server_ctx {
@@ -77,7 +76,7 @@ struct ss_server_ctx {
 	struct buf *buf;
 	int max_fd;
 	struct ss_fd_set *ss_allfd_set;
-	struct fd_curr_state *fd_state;
+	struct fd_curr_state fd_state[1024 * 10];
 };
 
 struct ss_server_ctx *ss_create_server(uint16_t port);
@@ -88,7 +87,6 @@ struct ss_remote_ctx *ss_conn_add_remote(struct ss_conn_ctx *conn, int mask,
 		const struct conn_info *remote_info,
 		struct io_event *event);
 void ss_server_del_conn(struct ss_server_ctx *s, struct ss_conn_ctx *conn);
-void ss_conn_del_remote(struct ss_conn_ctx *conn, struct ss_remote_ctx *remote);
 int ss_handshake_handle(struct ss_conn_ctx *conn);
 int ss_request_handle(struct ss_conn_ctx *conn, 
 		struct conn_info *remote_info);

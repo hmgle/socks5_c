@@ -24,31 +24,18 @@ static void ss_remote_io_handle(void *remote, int fd, void *data, int mask)
 	int readed;
 	int ret;
 	struct ss_remote_ctx *remote_ptr = remote;
+	struct ss_conn_ctx *conn = remote_ptr->conn_entry;
 	struct buf *buf = remote_ptr->conn_entry->msg;
 
 	readed = recv(fd, buf->data, buf->max, MSG_DONTWAIT);
 	if (readed <= 0) {
-		ss_conn_del_remote(remote_ptr->conn_entry, remote_ptr);
+		ss_server_del_conn(conn->server_entry, conn);
 		return;
 	}
 	ret = send(remote_ptr->conn_entry->conn_fd, buf->data, readed,
 			MSG_DONTWAIT);
 	if (ret != readed)
 		debug_print("send return %d, should send %d", ret, readed);
-}
-
-static struct ss_remote_ctx *trace_entry(const struct ss_remote_ctx *trace,
-					int n)
-{
-	struct ss_remote_ctx *pos;
-	int i = 0;
-
-	list_for_each_entry(pos, &trace->list, list) {
-		if (i == n)
-			return pos;
-		i++;
-	}
-	return NULL;
 }
 
 static void client_to_remote(struct ss_conn_ctx *conn)
@@ -63,7 +50,7 @@ static void client_to_remote(struct ss_conn_ctx *conn)
 		ss_server_del_conn(conn->server_entry, conn);
 		return;
 	}
-	remote = trace_entry(conn->remote, 0);
+	remote = &conn->remote;
 	ret = send(remote->remote_fd, buf->data, readed, MSG_DONTWAIT);
 	if (ret != readed)
 		debug_print("send return %d, should send %d", ret, readed);
@@ -79,7 +66,7 @@ static void ss_io_handle(void *conn, int fd, void *data, int mask)
 	int ret;
 	struct conn_info remote_info;
 	struct io_event event = {
-		.mask = AE_READABLE | AE_WRITABLE,
+		.mask = AE_READABLE,
 		.rfileproc = ss_remote_io_handle, /* server 可读 */
 		.wfileproc = NULL,
 		.para = NULL,
@@ -90,8 +77,11 @@ static void ss_io_handle(void *conn, int fd, void *data, int mask)
 		ret = ss_request_handle(conn_ptr, &remote_info);
 		if (ret < 0)
 			goto err;
-		ss_conn_add_remote(conn_ptr, AE_READABLE | AE_WRITABLE,
-				&remote_info, &event);
+		if (ss_conn_add_remote(conn_ptr, AE_READABLE,
+				&remote_info, &event) == NULL) {
+			debug_print("ss_conn_add_remote() failed");
+			goto err;
+		}
 		conn_ptr->ss_conn_state = CONNECTING;
 		break;
 	case CONNECTING: /* forwarding */
