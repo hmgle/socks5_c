@@ -79,7 +79,7 @@ static void ss_io_handle(void *conn, int fd, void *data, int mask)
 	int ret;
 	struct conn_info remote_info;
 	struct io_event event = {
-		.mask = AE_READABLE | AE_WRITABLE,
+		.mask = AE_READABLE,
 		.rfileproc = ss_remote_io_handle, /* server 可读 */
 		.wfileproc = NULL,
 		.para = NULL,
@@ -90,7 +90,7 @@ static void ss_io_handle(void *conn, int fd, void *data, int mask)
 		ret = ss_request_handle(conn_ptr, &remote_info);
 		if (ret < 0)
 			goto err;
-		ss_conn_add_remote(conn_ptr, AE_READABLE | AE_WRITABLE,
+		ss_conn_add_remote(conn_ptr, AE_READABLE,
 				&remote_info, &event);
 		conn_ptr->ss_conn_state = CONNECTING;
 		break;

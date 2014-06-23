@@ -74,7 +74,7 @@ static void ss_io_handle(void *conn, int fd, void *data, int mask)
 	struct ss_conn_ctx *conn_ptr = conn;
 	struct conn_info remote_info = {"127.0.0.1", 8388};
 	struct io_event event = {
-		.mask = AE_READABLE | AE_WRITABLE,
+		.mask = AE_READABLE,
 		.rfileproc = ss_remote_io_handle, /* server 可读 */
 		.wfileproc = NULL,
 		.para = NULL,
@@ -83,7 +83,7 @@ static void ss_io_handle(void *conn, int fd, void *data, int mask)
 	switch (conn_ptr->ss_conn_state) {
 	case OPENING:
 		ss_handshake_handle(conn_ptr);
-		ss_conn_add_remote(conn_ptr, AE_READABLE | AE_WRITABLE,
+		ss_conn_add_remote(conn_ptr, AE_READABLE,
 				&remote_info, &event);
 		conn_ptr->ss_conn_state = CONNECTING;
 		break;
