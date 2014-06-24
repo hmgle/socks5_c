@@ -1,6 +1,10 @@
 #include "socket_wrap.h"
 #include "socks.h"
 
+static char *remote_ip = "127.0.0.1";
+static uint16_t remote_port = 8388;
+static uint16_t listen_port = 1080;
+
 static void ss_accept_handle(void *s, int fd, void *data, int mask)
 {
 	int conn_fd;
@@ -59,7 +63,7 @@ static void client_to_remote(struct ss_conn_ctx *conn)
 static void ss_io_handle(void *conn, int fd, void *data, int mask)
 {
 	struct ss_conn_ctx *conn_ptr = conn;
-	struct conn_info remote_info = {"127.0.0.1", 8388};
+	struct conn_info remote_info;
 	struct io_event event = {
 		.mask = AE_READABLE,
 		.rfileproc = ss_remote_io_handle, /* server 可读 */
@@ -67,6 +71,8 @@ static void ss_io_handle(void *conn, int fd, void *data, int mask)
 		.para = NULL,
 	};
 
+	strncpy(remote_info.ip, remote_ip, sizeof(remote_info.ip));
+	remote_info.port = remote_port;
 	switch (conn_ptr->ss_conn_state) {
 	case OPENING:
 		ss_handshake_handle(conn_ptr);
@@ -89,8 +95,27 @@ int main(int argc, char **argv)
 	struct ss_server_ctx *lo_s;
 	struct io_event s_event;
 	struct io_event c_event;
+	int opt;
 
-	lo_s = ss_create_server(1080);
+	while ((opt = getopt(argc, argv, "l:p:s:h?")) != -1) {
+		switch (opt) {
+		case 'l':
+			remote_ip = optarg;
+			break;
+		case 'p':
+			remote_port = atoi(optarg);
+			break;
+		case 's':
+			listen_port = atoi(optarg);
+			break;
+		default:
+			fprintf(stderr,
+				"usage: %s [-l remote_ip] "
+				"[-p remote_port] [-s listen_port]\n", argv[0]);
+			exit(1);
+		}
+	}
+	lo_s = ss_create_server(listen_port);
 	if (lo_s == NULL)
 		DIE("ss_create_server failed!");
 	memset(&s_event, 0, sizeof(s_event));

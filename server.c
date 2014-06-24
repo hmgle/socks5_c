@@ -1,6 +1,8 @@
 #include "socket_wrap.h"
 #include "socks.h"
 
+static uint16_t server_port = 8388;
+
 static void ss_accept_handle(void *s, int fd, void *data, int mask)
 {
 	int conn_fd;
@@ -102,8 +104,20 @@ int main(int argc, char **argv)
 	struct ss_server_ctx *ss_s;
 	struct io_event s_event;
 	struct io_event c_event;
+	int opt;
 
-	ss_s = ss_create_server(8388);
+	while ((opt = getopt(argc, argv, "p:h?")) != -1) {
+		switch (opt) {
+		case 'p':
+			server_port = atoi(optarg);
+			break;
+		default:
+			fprintf(stderr,
+				"usage: %s [-p server_port]\n", argv[0]);
+			exit(1);
+		}
+	}
+	ss_s = ss_create_server(server_port);
 	if (ss_s == NULL)
 		DIE("ss_create_server failed!");
 	memset(&s_event, 0, sizeof(s_event));
