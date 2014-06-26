@@ -47,9 +47,11 @@ struct fd_curr_state {
 
 struct ss_remote_ctx {
 	int remote_fd;
+	struct ss_server_ctx *server_entry;
 	struct ss_conn_ctx *conn_entry;
 	int fd_mask; /* one of AE_(READABLE|WRITABLE) */
 	struct io_event io_proc;
+	struct list_head list;
 };
 
 struct ss_conn_ctx {
@@ -59,10 +61,9 @@ struct ss_conn_ctx {
 	enum ss_state ss_conn_state;
 	struct conn_info ss_conn_info;
 	struct io_event io_proc;
-	struct buf *msg;
 	struct list_head list;
 	int remote_count;
-	struct ss_remote_ctx remote;
+	struct ss_remote_ctx *remote;
 };
 
 struct ss_server_ctx {
@@ -72,6 +73,7 @@ struct ss_server_ctx {
 	uint32_t s_addr;
 	int conn_count; /* 连接数 */
 	struct ss_conn_ctx *conn;
+	struct ss_remote_ctx *remote;
 	struct io_event io_proc;
 	struct buf *buf;
 	int max_fd;
@@ -87,10 +89,10 @@ struct ss_remote_ctx *ss_conn_add_remote(struct ss_conn_ctx *conn, int mask,
 		const struct conn_info *remote_info,
 		struct io_event *event);
 void ss_server_del_conn(struct ss_server_ctx *s, struct ss_conn_ctx *conn);
+void ss_del_remote(struct ss_server_ctx *s, struct ss_remote_ctx *remote);
 int ss_handshake_handle(struct ss_conn_ctx *conn);
 int ss_request_handle(struct ss_conn_ctx *conn, 
 		struct conn_info *remote_info);
-int ss_send_msg_conn(struct ss_conn_ctx *conn, int msg_type);
 void ss_loop(struct ss_server_ctx *server);
 
 #endif

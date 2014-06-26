@@ -27,11 +27,15 @@ static void ss_remote_io_handle(void *remote, int fd, void *data, int mask)
 	int ret;
 	struct ss_remote_ctx *remote_ptr = remote;
 	struct ss_conn_ctx *conn = remote_ptr->conn_entry;
-	struct buf *buf = remote_ptr->conn_entry->msg;
+	struct buf *buf = remote_ptr->server_entry->buf;
 
+	if (conn == NULL) {
+		ss_del_remote(remote_ptr->server_entry, remote_ptr);
+		return;
+	}
 	readed = recv(fd, buf->data, buf->max, MSG_DONTWAIT);
 	if (readed <= 0) {
-		ss_server_del_conn(conn->server_entry, conn);
+		ss_del_remote(remote_ptr->server_entry, remote_ptr);
 		return;
 	}
 	ret = send(remote_ptr->conn_entry->conn_fd, buf->data, readed,
@@ -44,15 +48,19 @@ static void client_to_remote(struct ss_conn_ctx *conn)
 {
 	int readed;
 	int ret;
-	struct buf *buf = conn->msg;
+	struct buf *buf = conn->server_entry->buf;
 	struct ss_remote_ctx *remote;
 
+	if (conn->remote == NULL) {
+		ss_server_del_conn(conn->server_entry, conn);
+		return;
+	}
 	readed = recv(conn->conn_fd, buf->data, buf->max, MSG_DONTWAIT);
 	if (readed <= 0) {
 		ss_server_del_conn(conn->server_entry, conn);
 		return;
 	}
-	remote = &conn->remote;
+	remote = conn->remote;
 	ret = send(remote->remote_fd, buf->data, readed, MSG_DONTWAIT);
 	if (ret != readed)
 		debug_print("send return %d, should send %d", ret, readed);
