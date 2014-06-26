@@ -13,12 +13,12 @@ static void ss_accept_handle(void *s, int fd, void *data, int mask)
 
 	conn_fd = ss_accept(fd, conn_info.ip, &conn_info.port);
 	if (conn_fd < 0) {
-		debug_print("ss_accetp failed!");
+		debug_print("ss_accetp failed: %s", strerror(errno));
 		return;
 	}
 	nc = ss_server_add_conn(s, conn_fd, AE_READABLE, &conn_info, data);
 	if (nc == NULL) {
-		debug_print("ss_server_add_conn failed!");
+		debug_print("ss_server_add_conn failed: %s", strerror(errno));
 		return;
 	}
 }
@@ -43,7 +43,8 @@ static void ss_remote_io_handle(void *remote, int fd, void *data, int mask)
 	ret = send(remote_ptr->conn_entry->conn_fd, buf->data, readed,
 			MSG_DONTWAIT);
 	if (ret != readed)
-		debug_print("send return %d, should send %d", ret, readed);
+		debug_print("send return %d, should send %d: %s",
+			    ret, readed, strerror(errno));
 }
 
 static void client_to_remote(struct ss_conn_ctx *conn)
@@ -65,7 +66,8 @@ static void client_to_remote(struct ss_conn_ctx *conn)
 	remote = conn->remote;
 	ret = send(remote->remote_fd, buf->data, readed, MSG_DONTWAIT);
 	if (ret != readed)
-		debug_print("send return %d, should send %d", ret, readed);
+		debug_print("send return %d, should send %d: %s",
+			    ret, readed, strerror(errno));
 }
 
 static void ss_io_handle(void *conn, int fd, void *data, int mask)
@@ -94,7 +96,7 @@ static void ss_io_handle(void *conn, int fd, void *data, int mask)
 		client_to_remote(conn_ptr);
 		break;
 	default:
-		debug_print("unknow state!");
+		debug_print("unknow state: %d", conn_ptr->ss_conn_state);
 	}
 }
 
