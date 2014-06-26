@@ -53,6 +53,10 @@ struct ss_server_ctx *ss_create_server(uint16_t port)
 	if (server->conn == NULL)
 		DIE("calloc failed!");
 	INIT_LIST_HEAD(&server->conn->list);
+	server->remote = calloc(1, sizeof(*server->remote));
+	if (server->remote == NULL)
+		DIE("calloc failed!");
+	INIT_LIST_HEAD(&server->remote->list);
 	return server;
 }
 
@@ -67,9 +71,6 @@ struct ss_conn_ctx *ss_server_add_conn(struct ss_server_ctx *s, int conn_fd,
 	new_conn->conn_fd = conn_fd;
 	new_conn->server_entry = s;
 	new_conn->fd_mask = mask;
-	new_conn->msg= buf_create(4096);
-	if (new_conn->msg == NULL)
-		DIE("buf_create failed");
 	new_conn->ss_conn_state = OPENING;
 	if (conn_info) {
 		strncpy(new_conn->ss_conn_info.ip, conn_info->ip,
@@ -95,40 +96,56 @@ struct ss_remote_ctx *ss_conn_add_remote(struct ss_conn_ctx *conn,
 		int mask, const struct conn_info *remote_info,
 		struct io_event *event)
 {
-	struct ss_remote_ctx *new_remote = &conn->remote;
+	struct ss_remote_ctx *new_remote;
 	struct ss_server_ctx *s = conn->server_entry;
 
+	new_remote = calloc(1, sizeof(*new_remote));
+	if (new_remote == NULL) {
+		debug_print("calloc failed: %s", strerror(errno));
+		return NULL;
+	}
 	new_remote->remote_fd = client_connect(remote_info->ip,
 					remote_info->port);
 	if (new_remote->remote_fd < 0) {
-		debug_print("client_connect() failed!");
+		debug_print("client_connect() failed: %s", strerror(errno));
 		return NULL;
 	}
+	new_remote->server_entry = s;
 	new_remote->conn_entry = conn;
 	new_remote->fd_mask = mask;
 	if (event)
 		memcpy(&new_remote->io_proc, event, sizeof(*event));
+	conn->remote = new_remote;
 	conn->remote_count++;
 	s->max_fd = (new_remote->remote_fd > s->max_fd) ?
 				new_remote->remote_fd : s->max_fd;
 	if (ss_fd_set_add_fd(s->ss_allfd_set, new_remote->remote_fd, mask) < 0)
 		DIE("ss_fd_set_add_fd failed!");
+	list_add(&new_remote->list, &s->remote->list) ;
 	return new_remote;
 }
 
 void ss_server_del_conn(struct ss_server_ctx *s, struct ss_conn_ctx *conn)
 {
-	struct ss_remote_ctx *remote = &conn->remote;
+	struct ss_remote_ctx *remote = conn->remote;
 
-	ss_fd_set_del_fd(s->ss_allfd_set, remote->remote_fd, remote->fd_mask);
-	close(remote->remote_fd);
-
+	if (conn->remote != NULL)
+		remote->conn_entry = NULL;
 	ss_fd_set_del_fd(s->ss_allfd_set, conn->conn_fd, conn->fd_mask);
 	s->conn_count--;
 	list_del(&conn->list);
-	buf_release(conn->msg);
 	close(conn->conn_fd);
 	free(conn);
+}
+
+void ss_del_remote(struct ss_server_ctx *s, struct ss_remote_ctx *remote)
+{
+	if (remote->conn_entry != NULL)
+		remote->conn_entry = NULL;
+	ss_fd_set_del_fd(s->ss_allfd_set, remote->remote_fd, remote->fd_mask);
+	close(remote->remote_fd);
+	list_del(&remote->list);
+	free(remote);
 }
 
 int ss_handshake_handle(struct ss_conn_ctx *conn)
@@ -285,20 +302,6 @@ int ss_request_handle(struct ss_conn_ctx *conn,
 	return 0;
 }
 
-int ss_send_msg_conn(struct ss_conn_ctx *conn, int msg_type)
-{
-	/* TODO */
-	int ret;
-	struct buf *msg = conn->msg;
-
-	ret = send(conn->conn_fd, msg->data, msg->used, msg_type);
-	if (ret != msg->used) {
-		debug_print("send return %d", ret);
-		return -1;
-	}
-	return 0;
-}
-
 static int ss_poll(struct ss_server_ctx *server)
 {
 	int numevents = 0;
@@ -324,7 +327,8 @@ static int ss_poll(struct ss_server_ctx *server)
 				server->fd_state[numevents].type = SS_CONN_CTX;
 				server->fd_state[numevents++].ctx_ptr = conn;
 			}
-			remote = &conn->remote;
+		}
+		list_for_each_entry(remote, &server->remote->list, list) {
 			if (remote->fd_mask & AE_READABLE &&
 			    FD_ISSET(remote->remote_fd, &set->_rfds)) {
 				remote->io_proc.mask |= AE_READABLE;
@@ -374,7 +378,7 @@ void ss_loop(struct ss_server_ctx *server)
 
 void ss_release_server(struct ss_server_ctx *ss_server)
 {
-	free(ss_server->conn);
+	/* TODO */
 	free(ss_server->ss_allfd_set);
 	buf_release(ss_server->buf);
 	free(ss_server);
