@@ -279,7 +279,6 @@ int ss_request_handle(struct ss_conn_ctx *conn,
 
 	if (ss_get_requests(&requests, conn->conn_fd, conn) == NULL) {
 		debug_print("ss_get_requests() failed: %s", strerror(errno));
-		ss_server_del_conn(conn->server_entry, conn);
 		return -1;
 	}
 	if (get_addr_info(&requests, remote_info) == NULL) {
