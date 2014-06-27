@@ -143,7 +143,7 @@ void ss_server_del_conn(struct ss_server_ctx *s, struct ss_conn_ctx *conn)
 void ss_del_remote(struct ss_server_ctx *s, struct ss_remote_ctx *remote)
 {
 	if (remote->conn_entry != NULL)
-		remote->conn_entry = NULL;
+		remote->conn_entry->remote = NULL;
 	ss_fd_set_del_fd(s->ss_allfd_set, remote->remote_fd, remote->fd_mask);
 	close(remote->remote_fd);
 	list_del(&remote->list);
