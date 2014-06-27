@@ -41,21 +41,21 @@ struct ss_server_ctx *ss_create_server(uint16_t port)
 		DIE("buf_create failed");
 	server->sock_fd = create_server_socket(port);
 	if (server->sock_fd < 0)
-		DIE("create_server_socket failed!");
+		DIE("create_server_socket failed");
 	server->fd_mask = AE_READABLE;
 	server->max_fd = server->sock_fd;
 	if (ss_fd_set_init(&server->ss_allfd_set) < 0)
-		DIE("ss_fd_set_init failed!");
+		DIE("ss_fd_set_init failed");
 	if (ss_fd_set_add_fd(server->ss_allfd_set,
 				server->sock_fd, AE_READABLE) < 0)
-		DIE("ss_fd_set_add_fd failed!");
+		DIE("ss_fd_set_add_fd failed");
 	server->conn = calloc(1, sizeof(*server->conn));
 	if (server->conn == NULL)
-		DIE("calloc failed!");
+		DIE("calloc failed");
 	INIT_LIST_HEAD(&server->conn->list);
 	server->remote = calloc(1, sizeof(*server->remote));
 	if (server->remote == NULL)
-		DIE("calloc failed!");
+		DIE("calloc failed");
 	INIT_LIST_HEAD(&server->remote->list);
 	return server;
 }
@@ -66,8 +66,10 @@ struct ss_conn_ctx *ss_server_add_conn(struct ss_server_ctx *s, int conn_fd,
 	struct ss_conn_ctx *new_conn;
 
 	new_conn = calloc(1, sizeof(*new_conn));
-	if (new_conn == NULL)
+	if (new_conn == NULL) {
+		debug_print("colloc failed: %s", strerror(errno));
 		return NULL;
+	}
 	new_conn->conn_fd = conn_fd;
 	new_conn->server_entry = s;
 	new_conn->fd_mask = mask;
@@ -85,7 +87,7 @@ struct ss_conn_ctx *ss_server_add_conn(struct ss_server_ctx *s, int conn_fd,
 	s->conn_count++;
 	s->max_fd = (conn_fd > s->max_fd) ? conn_fd : s->max_fd;
 	if (ss_fd_set_add_fd(s->ss_allfd_set, conn_fd, mask) < 0)
-		DIE("ss_fd_set_add_fd failed!");
+		DIE("ss_fd_set_add_fd failed");
 	return new_conn;
 }
 
@@ -120,7 +122,7 @@ struct ss_remote_ctx *ss_conn_add_remote(struct ss_conn_ctx *conn,
 	s->max_fd = (new_remote->remote_fd > s->max_fd) ?
 				new_remote->remote_fd : s->max_fd;
 	if (ss_fd_set_add_fd(s->ss_allfd_set, new_remote->remote_fd, mask) < 0)
-		DIE("ss_fd_set_add_fd failed!");
+		DIE("ss_fd_set_add_fd failed");
 	list_add(&new_remote->list, &s->remote->list) ;
 	return new_remote;
 }
@@ -167,7 +169,7 @@ int ss_handshake_handle(struct ss_conn_ctx *conn)
 	conn->ss_conn_state = CONNECTING;
 	return 0;
 err:
-	debug_print("handshake failed!");
+	debug_print("handshake failed: %s", strerror(errno));
 	ss_server_del_conn(conn->server_entry, conn);
 	return -1;
 }
@@ -243,8 +245,9 @@ static struct conn_info *get_addr_info(const struct ss_requests_frame *requests,
 		break;
 	case 0x03: /* domainname */
 		if ((hptr = gethostbyname((char *)&requests->dst_addr[1])) ==
-				NULL) {
-			debug_print("gethostbyname() failed!");
+		    NULL) {
+			debug_print("gethostbyname() failed: %s",
+				    strerror(errno));
 			return NULL;
 		}
 		if (hptr->h_addrtype == AF_INET) {
@@ -259,7 +262,7 @@ static struct conn_info *get_addr_info(const struct ss_requests_frame *requests,
 	case 0x04: /* ip v6 */
 		break;
 	default:
-		debug_print("unknow atyp!");
+		debug_print("unknow atyp: %d", requests->atyp);
 		return NULL;
 	}
 	remote_info->port = ntohs(*((uint16_t *)(requests->dst_port)));
@@ -275,12 +278,12 @@ int ss_request_handle(struct ss_conn_ctx *conn,
 	int ret;
 
 	if (ss_get_requests(&requests, conn->conn_fd, conn) == NULL) {
-		debug_print("ss_get_requests() failed!");
+		debug_print("ss_get_requests() failed: %s", strerror(errno));
 		ss_server_del_conn(conn->server_entry, conn);
 		return -1;
 	}
 	if (get_addr_info(&requests, remote_info) == NULL) {
-		debug_print("get_addr_info() failed!");
+		debug_print("get_addr_info() failed: %s", strerror(errno));
 		return -1;
 	}
 	buf->data[0] = 0x5;
@@ -296,7 +299,7 @@ int ss_request_handle(struct ss_conn_ctx *conn,
 	buf->used = 10;
 	ret = send(conn->conn_fd, buf->data, buf->used, 0);
 	if (ret != buf->used) {
-		debug_print("send return %d", (int)ret);
+		debug_print("send return %d: %s", (int)ret, strerror(errno));
 		return -1;
 	}
 	return 0;

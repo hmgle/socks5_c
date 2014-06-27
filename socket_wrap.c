@@ -45,11 +45,11 @@ int create_server_socket(uint16_t port)
 
 	/* close server socket on exec so cgi's can't write to it */
 	if (fcntl(server_s, F_SETFD, 1) == -1)
-		DIE("can't set close-on-exec on server socket!");
+		DIE("can't set close-on-exec");
 
 	if ((setsockopt(server_s, SOL_SOCKET, SO_REUSEADDR, (void *)&sock_opt,
 			sizeof(sock_opt))) == -1)
-		DIE("setsockopt failed!");
+		DIE("setsockopt failed");
 
 	/* internet family-specific code encapsulated in bind_server()  */
 	if (bind_server(server_s, NULL, port) == -1)
@@ -90,14 +90,15 @@ int client_connect(const char *addr, uint16_t port)
 
 		he = gethostbyname(addr);
 		if (he == NULL) {
-			debug_print("can't resolve: %s", addr);
+			debug_print("can't resolve: %s: %s",
+				    addr, strerror(errno));
 			close(s);
 			return -1;
 		}
 		memcpy(&sa.sin_addr, he->h_addr, sizeof(struct in_addr));
 	}
 	if (connect(s, (struct sockaddr*)&sa, sizeof(sa)) < 0) {
-		debug_print("connect failed!");
+		debug_print("connect failed: %s", strerror(errno));
 		close(s);
 		return -1;
 	}

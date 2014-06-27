@@ -15,6 +15,7 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 #include <sys/time.h>
+#include <errno.h>
 
 int create_server_socket(uint16_t port);
 int ss_accept(int s, char *client_ip, uint16_t *client_port);
