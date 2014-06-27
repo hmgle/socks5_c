@@ -85,7 +85,8 @@ static void ss_io_handle(void *conn, int fd, void *data, int mask)
 	remote_info.port = remote_port;
 	switch (conn_ptr->ss_conn_state) {
 	case OPENING:
-		ss_handshake_handle(conn_ptr);
+		if (ss_handshake_handle(conn_ptr) < 0)
+			return;
 		ss_conn_add_remote(conn_ptr, AE_READABLE,
 				&remote_info, &event);
 		conn_ptr->ss_conn_state = CONNECTING;
