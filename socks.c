@@ -218,10 +218,11 @@ static struct ss_requests_frame *
 ss_get_requests(struct ss_requests_frame *requests, int fd,
 		struct ss_conn_ctx *conn)
 {
-	struct buf *buf = conn->server_entry->buf;
+	struct ss_server_ctx *server = conn->server_entry;
+	struct buf *buf = server->buf;
 	ssize_t ret;
 
-	ret = recv(fd, buf->data, 4, 0);
+	ret = server->ss_recv(fd, buf->data, 4, 0, server);
 	if (ret != 4)
 		return NULL;
 	if (buf->data[0] != 0x05 || buf->data[2] != 0)
@@ -236,25 +237,28 @@ ss_get_requests(struct ss_requests_frame *requests, int fd,
 	switch (buf->data[3]) { /* ATYP */
 	case 0x01: /* IPv4 */
 		requests->atyp = 0x01;
-		ret = recv(conn->conn_fd, requests->dst_addr, 4, 0);
+		ret = server->ss_recv(conn->conn_fd, requests->dst_addr, 4, 0,
+				      server);
 		if (ret != 4)
 			return NULL;
 		requests->dst_addr[ret] = '\0';
 		break;
 	case 0x03: /* FQDN */
 		requests->atyp = 0x03;
-		ret = recv(conn->conn_fd, requests->dst_addr, 1, 0);
+		ret = server->ss_recv(conn->conn_fd, requests->dst_addr, 1, 0,
+				      server);
 		if (ret != 1)
 			return NULL;
-		ret = recv(conn->conn_fd, &requests->dst_addr[1],
-				requests->dst_addr[0], 0);
+		ret = server->ss_recv(conn->conn_fd, &requests->dst_addr[1],
+				      requests->dst_addr[0], 0, server);
 		if (ret != requests->dst_addr[0])
 			return NULL;
 		requests->dst_addr[ret + 1] = '\0';
 		break;
 	case 0x04: /* IPv6 */
 		requests->atyp = 0x04;
-		ret = recv(conn->conn_fd, requests->dst_addr, 16, 0);
+		ret = server->ss_recv(conn->conn_fd, requests->dst_addr, 16, 0,
+				      server);
 		if (ret != 16)
 			return NULL;
 		break;
@@ -262,7 +266,7 @@ ss_get_requests(struct ss_requests_frame *requests, int fd,
 		debug_print("err ATYP: %x", buf->data[3]);
 		return NULL;
 	}
-	ret = recv(conn->conn_fd, requests->dst_port, 2, 0);
+	ret = server->ss_recv(conn->conn_fd, requests->dst_port, 2, 0, server);
 	if (ret != 2)
 		return NULL;
 	return requests;
@@ -274,7 +278,8 @@ static struct conn_info *get_addr_info(const struct ss_requests_frame *requests,
 	struct in_addr remote_addr;
 	struct hostent *hptr;
 	char **pptr;
-	char str[INET_ADDRSTRLEN];
+	char str[INET_ADDRSTRLEN] = {0,};
+	char *addr_tmp;
 
 	bzero(&remote_addr, sizeof(remote_addr));
 	switch (requests->atyp) {
@@ -284,10 +289,13 @@ static struct conn_info *get_addr_info(const struct ss_requests_frame *requests,
 		sprintf(remote_info->ip, "%s", inet_ntoa(remote_addr));
 		break;
 	case 0x03: /* domainname */
-		if ((hptr = gethostbyname((char *)&requests->dst_addr[1])) ==
-		    NULL) {
-			debug_print("gethostbyname() failed: %s",
-				    strerror(errno));
+		addr_tmp = alloca(requests->dst_addr[0] + 1);
+		memcpy(addr_tmp, (char *)&requests->dst_addr[1],
+				requests->dst_addr[0]);
+		addr_tmp[requests->dst_addr[0]] = '\0';
+		if ((hptr = gethostbyname(addr_tmp)) == NULL) {
+			debug_print("gethostbyname() %s failed: %s",
+				    &requests->dst_addr[1], strerror(errno));
 			return NULL;
 		}
 		if (hptr->h_addrtype == AF_INET) {
@@ -314,7 +322,8 @@ int ss_request_handle(struct ss_conn_ctx *conn,
 {
 	/* TODO */
 	struct ss_requests_frame requests;
-	struct buf *buf = conn->server_entry->buf;
+	struct ss_server_ctx *server = conn->server_entry;
+	struct buf *buf = server->buf;
 	int ret;
 
 	if (ss_get_requests(&requests, conn->conn_fd, conn) == NULL) {
@@ -336,7 +345,7 @@ int ss_request_handle(struct ss_conn_ctx *conn,
 	buf->data[4 + 4] = 0x19;
 	buf->data[4 + 5] = 0x19;
 	buf->used = 10;
-	ret = send(conn->conn_fd, buf->data, buf->used, 0);
+	ret = server->ss_send(conn->conn_fd, buf->data, buf->used, 0, server);
 	if (ret != buf->used) {
 		debug_print("send return %d: %s", (int)ret, strerror(errno));
 		return -1;

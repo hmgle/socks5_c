@@ -27,25 +27,26 @@ static void ss_remote_io_handle(void *remote, int fd, void *data, int mask)
 	int ret;
 	struct ss_remote_ctx *remote_ptr = remote;
 	struct ss_conn_ctx *conn = remote_ptr->conn_entry;
-	struct buf *buf = remote_ptr->server_entry->buf;
+	struct ss_server_ctx *server = remote_ptr->server_entry;
+	struct buf *buf = server->buf;
 
 	if (conn == NULL) {
-		ss_del_remote(remote_ptr->server_entry, remote_ptr);
+		ss_del_remote(server, remote_ptr);
 		return;
 	}
 	readed = recv(fd, buf->data, buf->max, MSG_DONTWAIT);
 	if (readed <= 0) {
-		ss_del_remote(remote_ptr->server_entry, remote_ptr);
+		ss_del_remote(server, remote_ptr);
 		return;
 	}
-	ret = send(remote_ptr->conn_entry->conn_fd, buf->data, readed,
-			MSG_DONTWAIT);
+	ret = server->ss_send(conn->conn_fd, buf->data, readed, MSG_DONTWAIT,
+			      server);
 	if (ret != readed) {
 		debug_print("send return %d, should send %d: %s",
 			    ret, readed, strerror(errno));
 		if (ret == -1 && errno != EAGAIN) {
 			debug_print("errno: %d", errno);
-			ss_del_remote(remote_ptr->server_entry, remote_ptr);
+			ss_del_remote(server, remote_ptr);
 		}
 	}
 }
@@ -54,16 +55,18 @@ static void client_to_remote(struct ss_conn_ctx *conn)
 {
 	int readed;
 	int ret;
-	struct buf *buf = conn->server_entry->buf;
+	struct ss_server_ctx *server = conn->server_entry;
+	struct buf *buf = server->buf;
 	struct ss_remote_ctx *remote;
 
 	if (conn->remote == NULL) {
-		ss_server_del_conn(conn->server_entry, conn);
+		ss_server_del_conn(server, conn);
 		return;
 	}
-	readed = recv(conn->conn_fd, buf->data, buf->max, MSG_DONTWAIT);
+	readed = server->ss_recv(conn->conn_fd, buf->data, buf->max,
+				 MSG_DONTWAIT, server);
 	if (readed <= 0) {
-		ss_server_del_conn(conn->server_entry, conn);
+		ss_server_del_conn(server, conn);
 		return;
 	}
 	remote = conn->remote;
@@ -72,7 +75,7 @@ static void client_to_remote(struct ss_conn_ctx *conn)
 		debug_print("send return %d, should send %d: %s",
 			    ret, readed, strerror(errno));
 		if (ret == -1 && errno != EAGAIN)
-			ss_server_del_conn(conn->server_entry, conn);
+			ss_server_del_conn(server, conn);
 	}
 }
 
