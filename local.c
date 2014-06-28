@@ -123,9 +123,11 @@ int main(int argc, char **argv)
 	struct ss_server_ctx *lo_s;
 	struct io_event s_event;
 	struct io_event c_event;
+	struct encry_key_s *key = NULL;
+	size_t key_len;
 	int opt;
 
-	while ((opt = getopt(argc, argv, "l:p:s:h?")) != -1) {
+	while ((opt = getopt(argc, argv, "l:p:s:e:h?")) != -1) {
 		switch (opt) {
 		case 'l':
 			remote_ip = optarg;
@@ -136,14 +138,21 @@ int main(int argc, char **argv)
 		case 's':
 			listen_port = atoi(optarg);
 			break;
+		case 'e':
+			key_len = strlen(optarg);
+			key = malloc(sizeof(*key) + key_len);
+			key->len = key_len;
+			memcpy(key->key, optarg, key_len);
+			break;
 		default:
 			fprintf(stderr,
 				"usage: %s [-l remote_ip] "
-				"[-p remote_port] [-s listen_port]\n", argv[0]);
+				"[-p remote_port] [-s listen_port] [-e key]\n",
+				argv[0]);
 			exit(1);
 		}
 	}
-	lo_s = ss_create_server(listen_port, NULL);
+	lo_s = ss_create_server(listen_port, key);
 	if (lo_s == NULL)
 		DIE("ss_create_server failed!");
 	memset(&s_event, 0, sizeof(s_event));

@@ -91,6 +91,10 @@ struct ss_server_ctx *ss_create_server(uint16_t port,
 		DIE("calloc failed");
 	INIT_LIST_HEAD(&server->remote->list);
 	if (key) {
+		server->encry_key = malloc(sizeof(*server->encry_key) +
+					   key->len);
+		memcpy(server->encry_key, key, sizeof(*server->encry_key) +
+			key->len);
 		server->ss_recv = decry_recv;
 		server->ss_send = encry_send;
 	} else {
@@ -430,6 +434,7 @@ void ss_loop(struct ss_server_ctx *server)
 void ss_release_server(struct ss_server_ctx *ss_server)
 {
 	/* TODO */
+	free(ss_server->encry_key);
 	free(ss_server->ss_allfd_set);
 	buf_release(ss_server->buf);
 	free(ss_server);

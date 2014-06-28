@@ -68,7 +68,7 @@ struct ss_conn_ctx {
 
 struct encry_key_s {
 	size_t len;
-	uint8_t *key;
+	uint8_t key[0];
 };
 
 struct ss_server_ctx {

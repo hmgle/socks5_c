@@ -126,20 +126,29 @@ int main(int argc, char **argv)
 	struct ss_server_ctx *ss_s;
 	struct io_event s_event;
 	struct io_event c_event;
+	struct encry_key_s *key = NULL;
+	size_t key_len;
 	int opt;
 
-	while ((opt = getopt(argc, argv, "p:h?")) != -1) {
+	while ((opt = getopt(argc, argv, "p:e:h?")) != -1) {
 		switch (opt) {
 		case 'p':
 			server_port = atoi(optarg);
 			break;
+		case 'e':
+			key_len = strlen(optarg);
+			key = malloc(sizeof(*key) + key_len);
+			key->len = key_len;
+			memcpy(key->key, optarg, key_len);
+			break;
 		default:
 			fprintf(stderr,
-				"usage: %s [-p server_port]\n", argv[0]);
+				"usage: %s [-p server_port] [-e key]\n",
+				argv[0]);
 			exit(1);
 		}
 	}
-	ss_s = ss_create_server(server_port, NULL);
+	ss_s = ss_create_server(server_port, key);
 	if (ss_s == NULL)
 		DIE("ss_create_server failed!");
 	memset(&s_event, 0, sizeof(s_event));
