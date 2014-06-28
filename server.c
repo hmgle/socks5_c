@@ -43,8 +43,10 @@ static void ss_remote_io_handle(void *remote, int fd, void *data, int mask)
 	if (ret != readed) {
 		debug_print("send return %d, should send %d: %s",
 			    ret, readed, strerror(errno));
-		if (ret == -1 && errno != EAGAIN)
+		if (ret == -1 && errno != EAGAIN) {
+			debug_print("errno: %d", errno);
 			ss_del_remote(remote_ptr->server_entry, remote_ptr);
+		}
 	}
 }
 

@@ -93,8 +93,12 @@ static void ss_io_handle(void *conn, int fd, void *data, int mask)
 	case OPENING:
 		if (ss_handshake_handle(conn_ptr) < 0)
 			return;
-		ss_conn_add_remote(conn_ptr, AE_READABLE,
-				&remote_info, &event);
+		if (ss_conn_add_remote(conn_ptr, AE_READABLE,
+				&remote_info, &event) == NULL) {
+			debug_print("ss_conn_add_remote() failed: %s",
+				    strerror(errno));
+			goto err;
+		}
 		conn_ptr->ss_conn_state = CONNECTING;
 		break;
 	case CONNECTING:
@@ -105,6 +109,10 @@ static void ss_io_handle(void *conn, int fd, void *data, int mask)
 	default:
 		debug_print("unknow state: %d", conn_ptr->ss_conn_state);
 	}
+	return;
+err:
+	debug_print("close");
+	ss_server_del_conn(conn_ptr->server_entry, conn_ptr);
 }
 
 int main(int argc, char **argv)
