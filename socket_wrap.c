@@ -79,19 +79,19 @@ int client_connect(const char *addr, uint16_t port)
 {
 	int s;
 	struct sockaddr_in sa;
-	int ret;
 
 	if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 		return -1;
-	ret = fd_set_noblock(s);
-	if (ret < 0)
-		debug_print("fd_set_noblock failed");
 
 	sa.sin_family = AF_INET;
 	sa.sin_port = htons(port);
 	if (inet_aton(addr, &sa.sin_addr) == 0) {
 		struct hostent *he;
 
+		/*
+		 * FIXME: it may block!
+		 * not support IPv6. getarrrinfo() is better.
+		 */
 		he = gethostbyname(addr);
 		if (he == NULL) {
 			debug_print("can't resolve: %s: %s",
@@ -101,6 +101,7 @@ int client_connect(const char *addr, uint16_t port)
 		}
 		memcpy(&sa.sin_addr, he->h_addr, sizeof(struct in_addr));
 	}
+	/* FIXME: it may block! */
 	if (connect(s, (struct sockaddr*)&sa, sizeof(sa)) < 0) {
 		debug_print("connect failed: %s", strerror(errno));
 		close(s);
