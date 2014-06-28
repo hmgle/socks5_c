@@ -66,6 +66,11 @@ struct ss_conn_ctx {
 	struct ss_remote_ctx *remote;
 };
 
+struct encry_key_s {
+	size_t len;
+	uint8_t *key;
+};
+
 struct ss_server_ctx {
 	int sock_fd;
 	int fd_mask; /* one of AE_(READABLE|WRITABLE) */
@@ -79,9 +84,15 @@ struct ss_server_ctx {
 	int max_fd;
 	struct ss_fd_set *ss_allfd_set;
 	struct fd_curr_state fd_state[1024 * 10];
+	struct encry_key_s *encry_key;
+	ssize_t (*ss_recv)(int sockfd, void *buf, size_t len, int flags,
+			   const struct ss_server_ctx *server);
+	ssize_t (*ss_send)(int sockfd, void *buf, size_t len, int flags,
+			   const struct ss_server_ctx *server);
 };
 
-struct ss_server_ctx *ss_create_server(uint16_t port);
+struct ss_server_ctx *ss_create_server(uint16_t port,
+				       const struct encry_key_s *key);
 void ss_release_server(struct ss_server_ctx *ss_server);
 struct ss_conn_ctx *ss_server_add_conn(struct ss_server_ctx *s, int conn_fd,
 		int mask, struct conn_info *conn_info, struct io_event *event);

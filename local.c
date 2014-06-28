@@ -140,7 +140,7 @@ int main(int argc, char **argv)
 			exit(1);
 		}
 	}
-	lo_s = ss_create_server(listen_port);
+	lo_s = ss_create_server(listen_port, NULL);
 	if (lo_s == NULL)
 		DIE("ss_create_server failed!");
 	memset(&s_event, 0, sizeof(s_event));

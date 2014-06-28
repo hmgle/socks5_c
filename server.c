@@ -136,7 +136,7 @@ int main(int argc, char **argv)
 			exit(1);
 		}
 	}
-	ss_s = ss_create_server(server_port);
+	ss_s = ss_create_server(server_port, NULL);
 	if (ss_s == NULL)
 		DIE("ss_create_server failed!");
 	memset(&s_event, 0, sizeof(s_event));

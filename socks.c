@@ -1,5 +1,6 @@
 #include "socks.h"
 #include "socket_wrap.h"
+#include "encrypt.h"
 
 static int ss_fd_set_init(struct ss_fd_set **fd_set)
 {
@@ -29,7 +30,39 @@ static void ss_fd_set_del_fd(struct ss_fd_set *fd_set, int fd, int mask)
 		FD_CLR(fd, &fd_set->wfds);
 }
 
-struct ss_server_ctx *ss_create_server(uint16_t port)
+static ssize_t _recv(int sockfd, void *buf, size_t len, int flags,
+		     const struct ss_server_ctx *server)
+{
+	return recv(sockfd, buf, len, flags);
+}
+
+static ssize_t decry_recv(int sockfd, void *buf, size_t len, int flags,
+		          const struct ss_server_ctx *server)
+{
+	ssize_t ret;
+
+	ret = recv(sockfd, buf, len, flags);
+	if (ret > 0)
+		xor_decrypt(buf, ret,
+			    server->encry_key->key, server->encry_key->len);
+	return ret;
+}
+
+static ssize_t _send(int sockfd, void *buf, size_t len, int flags,
+		     const struct ss_server_ctx *server)
+{
+	return send(sockfd, buf, len, flags);
+}
+
+static ssize_t encry_send(int sockfd, void *buf, size_t len, int flags,
+		          const struct ss_server_ctx *server)
+{
+	xor_encrypt(buf, len, server->encry_key->key, server->encry_key->len);
+	return send(sockfd, buf, len, flags);
+}
+
+struct ss_server_ctx *ss_create_server(uint16_t port,
+				       const struct encry_key_s *key)
 {
 	struct ss_server_ctx *server;
 
@@ -57,6 +90,13 @@ struct ss_server_ctx *ss_create_server(uint16_t port)
 	if (server->remote == NULL)
 		DIE("calloc failed");
 	INIT_LIST_HEAD(&server->remote->list);
+	if (key) {
+		server->ss_recv = decry_recv;
+		server->ss_send = encry_send;
+	} else {
+		server->ss_recv = _recv;
+		server->ss_send = _send;
+	}
 	return server;
 }
 
