@@ -79,9 +79,13 @@ int client_connect(const char *addr, uint16_t port)
 {
 	int s;
 	struct sockaddr_in sa;
+	int ret;
 
 	if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 		return -1;
+	ret = fd_set_noblock(s);
+	if (ret < 0)
+		debug_print("fd_set_noblock failed");
 
 	sa.sin_family = AF_INET;
 	sa.sin_port = htons(port);
