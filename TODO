@@ -1,0 +1,7 @@
+[ ] IPv6
+[ ] select 改为 epoll
+[ ] daemon
+[ ] log
+[ ] config file
+[ ] udp
+[ ] 改进加密认证
