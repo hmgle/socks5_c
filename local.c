@@ -41,8 +41,10 @@ static void ss_remote_io_handle(void *remote, int fd, void *data, int mask)
 		ss_del_remote(server, remote_ptr);
 		return;
 	}
+	// ret = send(conn->conn_fd, buf->data, readed,
+	// 		MSG_DONTWAIT);
 	ret = send(conn->conn_fd, buf->data, readed,
-			MSG_DONTWAIT);
+			0);
 	if (ret != readed) {
 		debug_print("send return %d, should send %d: %s",
 			    ret, readed, strerror(errno));
@@ -69,8 +71,10 @@ static void client_to_remote(struct ss_conn_ctx *conn)
 		return;
 	}
 	remote = conn->remote;
+	// ret = server->ss_send(remote->remote_fd, buf->data, readed,
+	// 		      MSG_DONTWAIT, conn);
 	ret = server->ss_send(remote->remote_fd, buf->data, readed,
-			      MSG_DONTWAIT, conn);
+			      0, conn);
 	if (ret != readed) {
 		debug_print("send return %d, should send %d: %s",
 			    ret, readed, strerror(errno));
