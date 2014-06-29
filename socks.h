@@ -64,6 +64,8 @@ struct ss_conn_ctx {
 	struct list_head list;
 	int remote_count;
 	struct ss_remote_ctx *remote;
+	size_t encry_loc; /* 加密同步用 */
+	size_t decry_loc; /* 解密同步用 */
 };
 
 struct encry_key_s {
@@ -86,9 +88,9 @@ struct ss_server_ctx {
 	struct fd_curr_state fd_state[1024 * 10];
 	struct encry_key_s *encry_key;
 	ssize_t (*ss_recv)(int sockfd, void *buf, size_t len, int flags,
-			   const struct ss_server_ctx *server);
+			   struct ss_conn_ctx *conn);
 	ssize_t (*ss_send)(int sockfd, void *buf, size_t len, int flags,
-			   const struct ss_server_ctx *server);
+			   struct ss_conn_ctx *conn);
 };
 
 struct ss_server_ctx *ss_create_server(uint16_t port,
