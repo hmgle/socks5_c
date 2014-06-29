@@ -31,33 +31,39 @@ static void ss_fd_set_del_fd(struct ss_fd_set *fd_set, int fd, int mask)
 }
 
 static ssize_t _recv(int sockfd, void *buf, size_t len, int flags,
-		     const struct ss_server_ctx *server)
+		     struct ss_conn_ctx *conn)
 {
 	return recv(sockfd, buf, len, flags);
 }
 
 static ssize_t decry_recv(int sockfd, void *buf, size_t len, int flags,
-		          const struct ss_server_ctx *server)
+		          struct ss_conn_ctx *conn)
 {
 	ssize_t ret;
+	struct ss_server_ctx *server = conn->server_entry;
 
+	assert(server);
 	ret = recv(sockfd, buf, len, flags);
 	if (ret > 0)
-		xor_decrypt(buf, ret,
-			    server->encry_key->key, server->encry_key->len);
+		xor_decrypt(buf, ret, server->encry_key->key,
+			    server->encry_key->len, &conn->decry_loc);
 	return ret;
 }
 
 static ssize_t _send(int sockfd, void *buf, size_t len, int flags,
-		     const struct ss_server_ctx *server)
+		     struct ss_conn_ctx *conn)
 {
 	return send(sockfd, buf, len, flags);
 }
 
 static ssize_t encry_send(int sockfd, void *buf, size_t len, int flags,
-		          const struct ss_server_ctx *server)
+		          struct ss_conn_ctx *conn)
 {
-	xor_encrypt(buf, len, server->encry_key->key, server->encry_key->len);
+	struct ss_server_ctx *server = conn->server_entry;
+
+	assert(server);
+	xor_encrypt(buf, len, server->encry_key->key, server->encry_key->len,
+		    &conn->encry_loc);
 	return send(sockfd, buf, len, flags);
 }
 
@@ -226,7 +232,7 @@ ss_get_requests(struct ss_requests_frame *requests, int fd,
 	struct buf *buf = server->buf;
 	ssize_t ret;
 
-	ret = server->ss_recv(fd, buf->data, 4, 0, server);
+	ret = server->ss_recv(fd, buf->data, 4, 0, conn);
 	if (ret != 4)
 		return NULL;
 	if (buf->data[0] != 0x05 || buf->data[2] != 0)
@@ -242,7 +248,7 @@ ss_get_requests(struct ss_requests_frame *requests, int fd,
 	case 0x01: /* IPv4 */
 		requests->atyp = 0x01;
 		ret = server->ss_recv(conn->conn_fd, requests->dst_addr, 4, 0,
-				      server);
+				      conn);
 		if (ret != 4)
 			return NULL;
 		requests->dst_addr[ret] = '\0';
@@ -250,11 +256,11 @@ ss_get_requests(struct ss_requests_frame *requests, int fd,
 	case 0x03: /* FQDN */
 		requests->atyp = 0x03;
 		ret = server->ss_recv(conn->conn_fd, requests->dst_addr, 1, 0,
-				      server);
+				      conn);
 		if (ret != 1)
 			return NULL;
 		ret = server->ss_recv(conn->conn_fd, &requests->dst_addr[1],
-				      requests->dst_addr[0], 0, server);
+				      requests->dst_addr[0], 0, conn);
 		if (ret != requests->dst_addr[0])
 			return NULL;
 		requests->dst_addr[ret + 1] = '\0';
@@ -262,7 +268,7 @@ ss_get_requests(struct ss_requests_frame *requests, int fd,
 	case 0x04: /* IPv6 */
 		requests->atyp = 0x04;
 		ret = server->ss_recv(conn->conn_fd, requests->dst_addr, 16, 0,
-				      server);
+				      conn);
 		if (ret != 16)
 			return NULL;
 		break;
@@ -270,7 +276,7 @@ ss_get_requests(struct ss_requests_frame *requests, int fd,
 		debug_print("err ATYP: %x", buf->data[3]);
 		return NULL;
 	}
-	ret = server->ss_recv(conn->conn_fd, requests->dst_port, 2, 0, server);
+	ret = server->ss_recv(conn->conn_fd, requests->dst_port, 2, 0, conn);
 	if (ret != 2)
 		return NULL;
 	return requests;
@@ -349,7 +355,7 @@ int ss_request_handle(struct ss_conn_ctx *conn,
 	buf->data[4 + 4] = 0x19;
 	buf->data[4 + 5] = 0x19;
 	buf->used = 10;
-	ret = server->ss_send(conn->conn_fd, buf->data, buf->used, 0, server);
+	ret = server->ss_send(conn->conn_fd, buf->data, buf->used, 0, conn);
 	if (ret != buf->used) {
 		debug_print("send return %d: %s", (int)ret, strerror(errno));
 		return -1;
