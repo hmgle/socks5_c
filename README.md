@@ -2,6 +2,8 @@
 
 一个轻量级的 [socks5](http://www.ietf.org/rfc/rfc1928.txt) 代理, 采用单进程多路复用 IO 模式. 可用于科学上网.
 
+**目前仅支持 UNIX/Linux 平台**
+
 ## 使用方法
 
 ### 编译:
