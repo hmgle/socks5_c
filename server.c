@@ -1,7 +1,7 @@
 #include "socket_wrap.h"
 #include "socks.h"
 
-static uint16_t server_port = 8388;
+static uint16_t server_port = 1984;
 
 static void ss_accept_handle(void *s, int fd, void *data, int mask)
 {

@@ -2,8 +2,8 @@
 #include "socks.h"
 
 static char *remote_ip = "127.0.0.1";
-static uint16_t remote_port = 8388;
-static uint16_t listen_port = 1080;
+static uint16_t remote_port = 1984;
+static uint16_t listen_port = 2080;
 
 static void ss_accept_handle(void *s, int fd, void *data, int mask)
 {
