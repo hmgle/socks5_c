@@ -7,6 +7,7 @@
 #include "buffer.h"
 #include <stdint.h>
 #include <stdlib.h>
+#include <sys/select.h>
 
 #define AE_NONE 0
 #define AE_READABLE 1
