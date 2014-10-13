@@ -23,7 +23,7 @@
 
 #define DIE(fmt, ...) \
 	do { \
-		debug_print(fmt); \
+		debug_print(fmt, ##__VA_ARGS__); \
 		exit(-1); \
 	} while (0)
 
