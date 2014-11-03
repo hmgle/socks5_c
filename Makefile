@@ -1,11 +1,4 @@
-debug = 1
-
-CFLAGS += -Wall
-ifeq ($(debug), 1)
-	CFLAGS += -O0 -DDEBUG=1 -g
-else
-	CFLAGS += -O2
-endif
+CFLAGS += -g -Wall -O0 -DDEBUG
 
 SRCDIR = .
 SRC := $(wildcard $(SRCDIR)/*.c)
