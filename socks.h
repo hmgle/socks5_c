@@ -98,15 +98,19 @@ struct ss_server_ctx *ss_create_server(uint16_t port,
 				       const struct encry_key_s *key);
 void ss_release_server(struct ss_server_ctx *ss_server);
 struct ss_conn_ctx *ss_server_add_conn(struct ss_server_ctx *s, int conn_fd,
-		int mask, struct conn_info *conn_info, struct io_event *event);
+				int mask, struct conn_info *conn_info);
 struct ss_remote_ctx *ss_conn_add_remote(struct ss_conn_ctx *conn, int mask,
 		const struct conn_info *remote_info,
 		struct io_event *event);
 void ss_server_del_conn(struct ss_server_ctx *s, struct ss_conn_ctx *conn);
 void ss_del_remote(struct ss_server_ctx *s, struct ss_remote_ctx *remote);
 int ss_handshake_handle(struct ss_conn_ctx *conn);
-int ss_request_handle(struct ss_conn_ctx *conn, 
+int ss_request_handle(struct ss_conn_ctx *conn,
 		struct conn_info *remote_info);
 void ss_loop(struct ss_server_ctx *server);
+void ss_server_set_handle(struct ss_server_ctx *server, int mask,
+		ss_ioproc *r_callback, ss_ioproc *w_callback, void *para);
+void ss_conn_set_handle(struct ss_conn_ctx *conn, int mask,
+		ss_ioproc *r_callback, ss_ioproc *w_callback, void *para);
 
 #endif

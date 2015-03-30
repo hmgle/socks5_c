@@ -111,7 +111,7 @@ struct ss_server_ctx *ss_create_server(uint16_t port,
 }
 
 struct ss_conn_ctx *ss_server_add_conn(struct ss_server_ctx *s, int conn_fd,
-		int mask, struct conn_info *conn_info, struct io_event *event)
+				int mask, struct conn_info *conn_info)
 {
 	struct ss_conn_ctx *new_conn;
 
@@ -131,14 +131,24 @@ struct ss_conn_ctx *ss_server_add_conn(struct ss_server_ctx *s, int conn_fd,
 									= '\0';
 		new_conn->ss_conn_info.port = conn_info->port;
 	}
-	if (event)
-		memcpy(&new_conn->io_proc, event, sizeof(*event));
 	list_add(&new_conn->list, &s->conn->list);
 	s->conn_count++;
 	s->max_fd = (conn_fd > s->max_fd) ? conn_fd : s->max_fd;
 	if (ss_fd_set_add_fd(s->ss_allfd_set, conn_fd, mask) < 0)
 		DIE("ss_fd_set_add_fd failed");
 	return new_conn;
+}
+
+void ss_conn_set_handle(struct ss_conn_ctx *conn, int mask,
+		ss_ioproc *r_callback, ss_ioproc *w_callback, void *para)
+{
+	struct io_event *event = &conn->io_proc;
+
+	memset(event, 0, sizeof(*event));
+	event->mask = mask;
+	event->rfileproc = r_callback;
+	event->wfileproc = w_callback;
+	event->para = para;
 }
 
 /*
@@ -444,4 +454,17 @@ void ss_release_server(struct ss_server_ctx *ss_server)
 	free(ss_server->ss_allfd_set);
 	buf_release(ss_server->buf);
 	free(ss_server);
+}
+
+void ss_server_set_handle(struct ss_server_ctx *server, int mask,
+			ss_ioproc *r_callback, ss_ioproc *w_callback,
+			void *para)
+{
+	struct io_event *event = &server->io_proc;
+
+	memset(event, 0, sizeof(*event));
+	event->mask = mask;
+	event->rfileproc = r_callback;
+	event->wfileproc = w_callback;
+	event->para = para;
 }
