@@ -137,6 +137,8 @@ int main(int argc, char **argv)
 		case 'm':
 			if (!strcmp("xor", optarg))
 				encry_method = XOR_METHOD;
+			else if (!strcmp("rc4", optarg))
+				encry_method = RC4_METHOD;
 			break;
 		case 'e':
 			key_len = strlen(optarg);
@@ -146,7 +148,7 @@ int main(int argc, char **argv)
 			break;
 		default:
 			fprintf(stderr,
-				"usage: %s [-p server_port] [-m xor] "
+				"usage: %s [-p server_port] [-m xor|rc4] "
 				"[-e key]\n",
 				argv[0]);
 			exit(1);

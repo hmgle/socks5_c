@@ -13,6 +13,14 @@ struct ss_encryptor *ss_create_encryptor(enum ss_encrypt_method method,
 		encryptor->xor_enc.key_len = key_len;
 		memcpy(encryptor->xor_enc.key, key, key_len);
 		return encryptor;
+	case RC4_METHOD:
+		encryptor = calloc(1, sizeof(typeof(*encryptor)) + key_len);
+		encryptor->enc_method = method;
+		encryptor->rc4_enc.key_len = key_len;
+		memcpy(encryptor->rc4_enc.key, key, key_len);
+		rc4_init(&encryptor->rc4_enc.en_state, key, key_len);
+		rc4_init(&encryptor->rc4_enc.de_state, key, key_len);
+		return encryptor;
 	default:
 		DIE("not support %d", method);
 	}
@@ -41,6 +49,9 @@ uint8_t *ss_encrypt(struct ss_encryptor *encryptor, uint8_t *dest,
 					&encryptor->xor_enc.encry_loc);
 		}
 		break;
+	case RC4_METHOD:
+		rc4_crypt(&encryptor->rc4_enc.en_state, src, dest, src_len);
+		return dest;
 	default:
 		DIE("not support %d", encryptor->enc_method);
 	}
@@ -64,6 +75,9 @@ uint8_t *ss_decrypt(struct ss_encryptor *decryptor, uint8_t *dest,
 					&decryptor->xor_enc.encry_loc);
 		}
 		break;
+	case RC4_METHOD:
+		rc4_crypt(&decryptor->rc4_enc.de_state, src, dest, src_len);
+		return dest;
 	default:
 		DIE("not support %d", decryptor->enc_method);
 	}
