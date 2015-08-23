@@ -66,13 +66,13 @@ uint8_t *ss_decrypt(struct ss_encryptor *decryptor, uint8_t *dest,
 			return xor_decrypt(src, src_len,
 					decryptor->xor_enc.key,
 					decryptor->xor_enc.key_len,
-					&decryptor->xor_enc.encry_loc);
+					&decryptor->xor_enc.decry_loc);
 		else {
 			memcpy(dest, src, src_len);
 			return xor_decrypt(dest, src_len,
 					decryptor->xor_enc.key,
 					decryptor->xor_enc.key_len,
-					&decryptor->xor_enc.encry_loc);
+					&decryptor->xor_enc.decry_loc);
 		}
 		break;
 	case RC4_METHOD:
