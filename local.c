@@ -120,11 +120,12 @@ static void ss_accept_handle(void *s, int fd, void *data, int mask)
 int main(int argc, char **argv)
 {
 	struct ss_server_ctx *lo_s;
+	enum ss_encrypt_method encry_method = NO_ENCRYPT;
 	struct encry_key_s *key = NULL;
 	size_t key_len;
 	int opt;
 
-	while ((opt = getopt(argc, argv, "l:p:s:e:h?")) != -1) {
+	while ((opt = getopt(argc, argv, "l:p:s:m:e:h?")) != -1) {
 		switch (opt) {
 		case 'l':
 			remote_ip = optarg;
@@ -135,6 +136,10 @@ int main(int argc, char **argv)
 		case 's':
 			listen_port = atoi(optarg);
 			break;
+		case 'm':
+			if (!strcmp("xor", optarg))
+				encry_method = XOR_METHOD;
+			break;
 		case 'e':
 			key_len = strlen(optarg);
 			key = malloc(sizeof(*key) + key_len);
@@ -144,12 +149,13 @@ int main(int argc, char **argv)
 		default:
 			fprintf(stderr,
 				"usage: %s [-l remote_ip] "
-				"[-p remote_port] [-s listen_port] [-e key]\n",
+				"[-p remote_port] [-s listen_port] [-m xor] "
+				"[-e key]\n",
 				argv[0]);
 			exit(1);
 		}
 	}
-	lo_s = ss_create_server(listen_port, key);
+	lo_s = ss_create_server(listen_port, encry_method, key);
 	if (lo_s == NULL)
 		DIE("ss_create_server failed!");
 	ss_server_set_handle(lo_s, AE_READABLE, ss_accept_handle, NULL, NULL);

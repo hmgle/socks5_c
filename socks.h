@@ -5,6 +5,7 @@
 #include "debug.h"
 #include "socks5_protocol.h"
 #include "buffer.h"
+#include "encrypt.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <sys/select.h>
@@ -65,8 +66,7 @@ struct ss_conn_ctx {
 	struct list_head list;
 	int remote_count;
 	struct ss_remote_ctx *remote;
-	size_t encry_loc; /* 加密同步用 */
-	size_t decry_loc; /* 解密同步用 */
+	struct ss_encryptor *encryptor;
 };
 
 struct encry_key_s {
@@ -87,7 +87,7 @@ struct ss_server_ctx {
 	int max_fd;
 	struct ss_fd_set *ss_allfd_set;
 	struct fd_curr_state fd_state[1024 * 10];
-	struct encry_key_s *encry_key;
+	struct ss_encryptor *encryptor;
 	ssize_t (*ss_recv)(int sockfd, void *buf, size_t len, int flags,
 			   struct ss_conn_ctx *conn);
 	ssize_t (*ss_send)(int sockfd, void *buf, size_t len, int flags,
@@ -95,6 +95,7 @@ struct ss_server_ctx {
 };
 
 struct ss_server_ctx *ss_create_server(uint16_t port,
+				       enum ss_encrypt_method encrypt_method,
 				       const struct encry_key_s *key);
 void ss_release_server(struct ss_server_ctx *ss_server);
 struct ss_conn_ctx *ss_server_add_conn(struct ss_server_ctx *s, int conn_fd,

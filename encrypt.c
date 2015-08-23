@@ -1,18 +1,70 @@
 #include "encrypt.h"
+#include "debug.h"
 
-uint8_t *xor_encrypt(uint8_t *buf, size_t buf_len,
-		     const uint8_t *key, size_t key_len, size_t *loc)
+struct ss_encryptor *ss_create_encryptor(enum ss_encrypt_method method,
+					 const uint8_t *key, size_t key_len)
 {
-	size_t i;
+	struct ss_encryptor *encryptor;
 
-	for (i = 0; i < buf_len; i++)
-		buf[i] ^= key[(i + *loc) % key_len];
-	*loc = (buf_len + *loc) % key_len;
-	return buf;
+	switch (method) {
+	case XOR_METHOD:
+		encryptor = calloc(1, sizeof(typeof(*encryptor)) + key_len);
+		encryptor->enc_method = method;
+		encryptor->xor_enc.key_len = key_len;
+		memcpy(encryptor->xor_enc.key, key, key_len);
+		return encryptor;
+	default:
+		DIE("not support %d", method);
+	}
 }
 
-uint8_t *xor_decrypt(uint8_t *buf, size_t buf_len,
-		     const uint8_t *key, size_t key_len, size_t *loc)
+void ss_release_encryptor(struct ss_encryptor *encryptor)
 {
-	return xor_encrypt(buf, buf_len, key, key_len, loc);
+	free(encryptor);
+}
+
+uint8_t *ss_encrypt(struct ss_encryptor *encryptor, uint8_t *dest,
+		    uint8_t *src, size_t src_len)
+{
+	switch (encryptor->enc_method) {
+	case XOR_METHOD:
+		if (dest == src)
+			return xor_encrypt(src, src_len,
+					encryptor->xor_enc.key,
+					encryptor->xor_enc.key_len,
+					&encryptor->xor_enc.encry_loc);
+		else {
+			memcpy(dest, src, src_len);
+			return xor_encrypt(dest, src_len,
+					encryptor->xor_enc.key,
+					encryptor->xor_enc.key_len,
+					&encryptor->xor_enc.encry_loc);
+		}
+		break;
+	default:
+		DIE("not support %d", encryptor->enc_method);
+	}
+}
+
+uint8_t *ss_decrypt(struct ss_encryptor *decryptor, uint8_t *dest,
+		    uint8_t *src, size_t src_len)
+{
+	switch (decryptor->enc_method) {
+	case XOR_METHOD:
+		if (dest == src)
+			return xor_decrypt(src, src_len,
+					decryptor->xor_enc.key,
+					decryptor->xor_enc.key_len,
+					&decryptor->xor_enc.encry_loc);
+		else {
+			memcpy(dest, src, src_len);
+			return xor_decrypt(dest, src_len,
+					decryptor->xor_enc.key,
+					decryptor->xor_enc.key_len,
+					&decryptor->xor_enc.encry_loc);
+		}
+		break;
+	default:
+		DIE("not support %d", decryptor->enc_method);
+	}
 }
