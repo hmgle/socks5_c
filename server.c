@@ -124,14 +124,19 @@ static void ss_accept_handle(void *s, int fd, void *data, int mask)
 int main(int argc, char **argv)
 {
 	struct ss_server_ctx *ss_s;
+	enum ss_encrypt_method encry_method = NO_ENCRYPT;
 	struct encry_key_s *key = NULL;
 	size_t key_len;
 	int opt;
 
-	while ((opt = getopt(argc, argv, "p:e:h?")) != -1) {
+	while ((opt = getopt(argc, argv, "p:m:e:h?")) != -1) {
 		switch (opt) {
 		case 'p':
 			server_port = atoi(optarg);
+			break;
+		case 'm':
+			if (!strcmp("xor", optarg))
+				encry_method = XOR_METHOD;
 			break;
 		case 'e':
 			key_len = strlen(optarg);
@@ -141,12 +146,13 @@ int main(int argc, char **argv)
 			break;
 		default:
 			fprintf(stderr,
-				"usage: %s [-p server_port] [-e key]\n",
+				"usage: %s [-p server_port] [-m xor] "
+				"[-e key]\n",
 				argv[0]);
 			exit(1);
 		}
 	}
-	ss_s = ss_create_server(server_port, key);
+	ss_s = ss_create_server(server_port, encry_method, key);
 	if (ss_s == NULL)
 		DIE("ss_create_server failed!");
 	ss_server_set_handle(ss_s, AE_READABLE, ss_accept_handle, NULL, NULL);

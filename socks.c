@@ -45,8 +45,7 @@ static ssize_t decry_recv(int sockfd, void *buf, size_t len, int flags,
 	assert(server);
 	ret = recv(sockfd, buf, len, flags);
 	if (ret > 0)
-		xor_decrypt(buf, ret, server->encry_key->key,
-			    server->encry_key->len, &conn->decry_loc);
+		ss_decrypt(conn->encryptor, buf, buf, ret);
 	return ret;
 }
 
@@ -62,12 +61,12 @@ static ssize_t encry_send(int sockfd, void *buf, size_t len, int flags,
 	struct ss_server_ctx *server = conn->server_entry;
 
 	assert(server);
-	xor_encrypt(buf, len, server->encry_key->key, server->encry_key->len,
-		    &conn->encry_loc);
+	ss_decrypt(conn->encryptor, buf, buf, len);
 	return send(sockfd, buf, len, flags);
 }
 
 struct ss_server_ctx *ss_create_server(uint16_t port,
+				       enum ss_encrypt_method encrypt_method,
 				       const struct encry_key_s *key)
 {
 	struct ss_server_ctx *server;
@@ -97,10 +96,8 @@ struct ss_server_ctx *ss_create_server(uint16_t port,
 		DIE("calloc failed");
 	INIT_LIST_HEAD(&server->remote->list);
 	if (key) {
-		server->encry_key = malloc(sizeof(*server->encry_key) +
-					   key->len);
-		memcpy(server->encry_key, key, sizeof(*server->encry_key) +
-			key->len);
+		server->encryptor = ss_create_encryptor(encrypt_method,
+							key->key, key->len);
 		server->ss_recv = decry_recv;
 		server->ss_send = encry_send;
 	} else {
@@ -136,6 +133,11 @@ struct ss_conn_ctx *ss_server_add_conn(struct ss_server_ctx *s, int conn_fd,
 	s->max_fd = (conn_fd > s->max_fd) ? conn_fd : s->max_fd;
 	if (ss_fd_set_add_fd(s->ss_allfd_set, conn_fd, mask) < 0)
 		DIE("ss_fd_set_add_fd failed");
+	if (s->encryptor) {
+		new_conn->encryptor = malloc(sizeof(*new_conn->encryptor));
+		memcpy(new_conn->encryptor, s->encryptor,
+					sizeof(*s->encryptor));
+	}
 	return new_conn;
 }
 
@@ -450,7 +452,7 @@ void ss_loop(struct ss_server_ctx *server)
 void ss_release_server(struct ss_server_ctx *ss_server)
 {
 	/* TODO */
-	free(ss_server->encry_key);
+	ss_release_encryptor(ss_server->encryptor);
 	free(ss_server->ss_allfd_set);
 	buf_release(ss_server->buf);
 	free(ss_server);
