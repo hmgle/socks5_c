@@ -2,16 +2,26 @@
 #define _ENCRYPT_H
 
 #include "xor.h"
+#include "rc4.h"
 
 enum ss_encrypt_method {
 	NO_ENCRYPT = 0,
 	XOR_METHOD = 1,
+	RC4_METHOD,
+};
+
+struct rc4_encryptor {
+	struct rc4_state en_state;
+	struct rc4_state de_state;
+	size_t key_len;
+	uint8_t key[0];
 };
 
 struct ss_encryptor {
 	enum ss_encrypt_method enc_method;
 	union {
 		struct xor_encryptor xor_enc;
+		struct rc4_encryptor rc4_enc;
 	};
 };
 
