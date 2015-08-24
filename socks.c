@@ -40,9 +40,7 @@ static ssize_t decry_recv(int sockfd, void *buf, size_t len, int flags,
 		          struct ss_conn_ctx *conn)
 {
 	ssize_t ret;
-	struct ss_server_ctx *server = conn->server_entry;
 
-	assert(server);
 	ret = recv(sockfd, buf, len, flags);
 	if (ret > 0)
 		ss_decrypt(conn->encryptor, buf, buf, ret);
@@ -58,9 +56,6 @@ static ssize_t _send(int sockfd, void *buf, size_t len, int flags,
 static ssize_t encry_send(int sockfd, void *buf, size_t len, int flags,
 		          struct ss_conn_ctx *conn)
 {
-	struct ss_server_ctx *server = conn->server_entry;
-
-	assert(server);
 	ss_decrypt(conn->encryptor, buf, buf, len);
 	return send(sockfd, buf, len, flags);
 }
