@@ -25,9 +25,9 @@ usage: ./server [-p server_port] [-m xor|rc4] [-e key]
 $ ./local -h
 usage: ./local [-l remote_ip] [-p remote_port] [-s listen_port] [-m xor|rc4] [-e key]
 ```
-### 翻墙实例:
+### 运行实例:
 
-假设墙外的服务器地址为: `104.167.51.31`, 在服务器上运行 **server**:
+假设服务器 IP 地址为: `104.167.51.31`, 在服务器上运行 **server**:
 
 ```console
 $ # 在 1984 端口监听等待连接, 使用 rc4 方法加密,  密钥为 "test"
