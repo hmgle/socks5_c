@@ -41,13 +41,21 @@ $ # 连接服务器的 1984 端口, 在本地 2080 端口监听, 使用 rc4 方�
 $ ./local -l 104.167.51.31 -p 1984 -s 2080 -m rc4 -e "test"
 ```
 
-Firefox 浏览器设置:
+- Firefox 浏览器设置:
 socks 主机填写 127.0.0.1, 端口填写: `2080`, 选择 `SOCKS v5` 代理.
 
-Chromium/Chrome 可以通过启动参数加载 [PAC](http://zh.wikipedia.org/zh-cn/%E4%BB%A3%E7%90%86%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE):
+- Chromium/Chrome 可以通过启动参数加载 [PAC](http://zh.wikipedia.org/zh-cn/%E4%BB%A3%E7%90%86%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE):
 
 ```console
-$ chromium-browser -proxy-pac-url="PAC_URL"
+$ cd socks5_c
+$ PAC_URL=$(pwd)
+$ chromium-browser -proxy-pac-url="file://"${PAC_URL}"/test.pac"
+```
+
+- 使用 curl 测试:
+
+```console
+$ curl -v --socks5-hostname 127.0.0.1:2080 http://www.fanfou.com
 ```
 
 ## 授权协议
